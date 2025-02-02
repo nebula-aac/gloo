@@ -1,6 +1,6 @@
 
 ---
-title: "load_balancer.proto"
+title: "LoadBalancer"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [LoadBalancerConfig](#loadbalancerconfig)
@@ -23,7 +23,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/load_balancer.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/load_balancer.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/load_balancer.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/load_balancer.proto)**
 
 
 
@@ -44,6 +44,8 @@ LoadBalancerConfig is the settings for the load balancer used to send requests t
 "ringHash": .gloo.solo.io.LoadBalancerConfig.RingHash
 "maglev": .gloo.solo.io.LoadBalancerConfig.Maglev
 "localityWeightedLbConfig": .google.protobuf.Empty
+"useHostnameForHashing": .google.protobuf.BoolValue
+"closeConnectionsOnHostSetChange": bool
 
 ```
 
@@ -57,6 +59,8 @@ LoadBalancerConfig is the settings for the load balancer used to send requests t
 | `ringHash` | [.gloo.solo.io.LoadBalancerConfig.RingHash](../load_balancer.proto.sk/#ringhash) | Use ring hash for load balancing. Only one of `ringHash`, `roundRobin`, `leastRequest`, `random`, or `maglev` can be set. |
 | `maglev` | [.gloo.solo.io.LoadBalancerConfig.Maglev](../load_balancer.proto.sk/#maglev) | Use maglev for load balancing. Only one of `maglev`, `roundRobin`, `leastRequest`, `random`, or `ringHash` can be set. |
 | `localityWeightedLbConfig` | [.google.protobuf.Empty](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/empty) | (Enterprise Only) https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/locality_weight#locality-weighted-load-balancing Locality weighted load balancing enables weighting assignments across different zones and geographical locations by using explicit weights. This field is required to enable locality weighted load balancing. |
+| `useHostnameForHashing` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Default: false, If set to true, the hostname will be used for hashing when using maglev for example, useful when using multiple host in the upstreams that resolve to the same IP. |
+| `closeConnectionsOnHostSetChange` | `bool` | If set to true, the load balancer will drain connections when the host set changes. Ring Hash or Maglev can be used to ensure that clients with the same key are routed to the same upstream host. Distruptions can cause new connections with the same key as existing connections to be routed to different hosts. Enabling this feature will cause the load balancer to drain existing connections when the host set changes, ensuring that new connections with the same key are consistently routed to the same host. Connections are not immediately closed, but are allowed to drain. |
 
 
 
@@ -179,7 +183,7 @@ Customizes the parameters used in the hashing algorithm to refine performance or
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `slowStartWindow` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | Represents the size of slow start window. If set, the newly created host remains in slow start mode starting from its creation time for the duration of slow start window. |
-| `aggression` | [.google.protobuf.DoubleValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/double-value) | This parameter controls the speed of traffic increase over the slow start window. Defaults to 1.0, so that endpoint would get linearly increasing amount of traffic. When increasing the value for this parameter, the speed of traffic ramp-up increases non-linearly. The value of aggression parameter should be greater than 0.0. By tuning the parameter, is possible to achieve polynomial or exponential shape of ramp-up curve. During slow start window, effective weight of an endpoint would be scaled with time factor and aggression: ``new_weight = weight * max(min_weight_percent, time_factor ^ (1 / aggression))``, where ``time_factor=(time_since_start_seconds / slow_start_time_seconds)``. As time progresses, more and more traffic would be sent to endpoint, which is in slow start window. Once host exits slow start, time_factor and aggression no longer affect its weight. |
+| `aggression` | [.google.protobuf.DoubleValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/double-value) | This parameter controls the speed of traffic increase over the slow start window. Defaults to 1.0, so that endpoint would get linearly increasing amount of traffic. When increasing the value for this parameter, the speed of traffic ramp-up increases non-linearly. The value of aggression parameter should be greater than 0.0. By tuning the parameter, is possible to achieve polynomial or exponential shape of ramp-up curve. During slow start window, effective weight of an endpoint would be scaled with time factor and aggression: `new_weight = weight * max(min_weight_percent, time_factor ^ (1 / aggression))`, where `time_factor=(time_since_start_seconds / slow_start_time_seconds)`. As time progresses, more and more traffic would be sent to endpoint, which is in slow start window. Once host exits slow start, time_factor and aggression no longer affect its weight. |
 | `minWeightPercent` | [.google.protobuf.DoubleValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/double-value) | Configures the minimum percentage of origin weight that avoids too small new weight, which may cause endpoints in slow start mode receive no traffic in slow start window. If not specified, the default is 10%. |
 
 

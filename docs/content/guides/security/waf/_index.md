@@ -7,12 +7,12 @@ description: Filter, monitor, and block potentially harmful HTTP traffic.
 Filter, monitor, and block potentially harmful HTTP traffic with a Web Application Firewall (WAF) policy.
 
 {{% notice note %}}
-The WAF feature was introduced with **Gloo Edge Enterprise**, release 0.18.23. If you are using an earlier version, this tutorial will not work.
+The WAF feature was introduced with **Gloo Gateway Enterprise**, release 0.18.23. If you are using an earlier version, this tutorial will not work.
 {{% /notice %}}
 
 ## About web application firewalls
 
-WAFs protect your web apps by monitoring, filtering, and blocking potentially harmful HTTP traffic. You write a WAF policy by following a framework and ruleset. Then, you apply the WAF policy to the route for the apps that you want to protect. When Gloo Edge receives an incoming request for that route (ingress traffic), the WAF intercepts and inspects the network packets and uses the rules that you set in the policy to determine access to the web app. The WAF policy also applies to any outgoing responses (egress traffic) along the route. This setup provides an additional layer of protection between your apps and end users.
+WAFs protect your web apps by monitoring, filtering, and blocking potentially harmful HTTP traffic. You write a WAF policy by following a framework and ruleset. Then, you apply the WAF policy to the route for the apps that you want to protect. When Gloo Gateway receives an incoming request for that route (ingress traffic), the WAF intercepts and inspects the network packets and uses the rules that you set in the policy to determine access to the web app. The WAF policy also applies to any outgoing responses (egress traffic) along the route. This setup provides an additional layer of protection between your apps and end users.
 
 In this section, you can learn about the following WAF topics:
 * [ModSecurity rule sets](#about-rule-sets)
@@ -25,20 +25,16 @@ Gloo supports the popular Web Application Firewall framework and ruleset [ModSec
 
 You have several options for using ModSecurity to write WAF policies:
 * Use publicly available rule sets that provide a generic set of detection rules to protect against the most common security threats. For example, the [OWASP Core Rule Set](https://github.com/coreruleset/coreruleset) is an open source project that protects apps against a wide range of attacks, including the "OWASP Top Ten."
-  {{% notice tip %}}
-  For your convenience, Gloo applies the OWASP Core Rule Set to your routes by default, but you can disable this feature by using the `disableCoreRuleSet` in your WAF policy.
-  {{% /notice %}}
 * Write your own custom rules by following the [ModSecurity rules language](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-(v3.x)). For examples, see [Configure WAF policies](#configure-waf-policies).
 
-For more information, see the [Gloo API docs]({{% versioned_link_path fromRoot="/reference/api/github.com/solo-io/gloo/projects/gloo/api/external/envoy/extensions/waf/waf.proto.sk/" %}}).
 
 ### Understand the WAF API {#about-api}
 
-The WAF filter supports a list of `RuleSet` objects which are loaded into the ModSecurity library.  The Gloo Edge API has a few conveniences built on top of that to allow easier access to the OWASP Core Rule Set (via the [`coreRuleSet`](#core-rule-set) field). 
+The WAF filter supports a list of `RuleSet` objects which are loaded into the ModSecurity library.  The Gloo Gateway API has a few conveniences built on top of that to allow easier access to the OWASP Core Rule Set (via the [`coreRuleSet`](#core-rule-set) field). 
 
 You can disable each rule set on a route independently of other rule sets. Rule sets are applied on top of each other in order. This order means that later rule sets overwrite any conflicting rules in previous rule sets. For more fine-grained control, you can add a custom `rule_str`, which is applied after any files of rule sets.
 
-Review the following `RuleSet` API example and explanation. For more information, see the [Gloo API docs]({{% versioned_link_path fromRoot="/reference/api/github.com/solo-io/gloo/projects/gloo/api/external/envoy/extensions/waf/waf.proto.sk/" %}}).
+Review the following `RuleSet`
 
 ```proto
 message ModSecurity {
@@ -60,7 +56,7 @@ message RuleSet {
 
 ### Example WAF configuration {#about-example}
 
-This tutorial does not provide guidance on rule sets, but instead how to apply rule sets within Gloo Edge configuration. For more information about making rule sets, see the [ModSecurity docs](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-(v3.x)).
+This tutorial does not provide guidance on rule sets, but instead how to apply rule sets within Gloo Gateway configuration. For more information about making rule sets, see the [ModSecurity docs](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-(v3.x)).
 
 The following example is for a rule set that is written directly into the configuration as a string. It does two things:
 1. This rule enables the rules engine (`On`), which is `Off` by default. You must explicitly turn the engine on. To run the rules engine to detect and log requests, but not to intervene such as by denying the request, you can set this value to `DetectionOnly`.
@@ -77,7 +73,7 @@ The following example is for a rule set that is written directly into the config
 
 ## Before you begin
 
-1. [Install Gloo Edge Enterprise]({{% versioned_link_path fromRoot="/installation/enterprise/" %}}) in a Kubernetes cluster.
+1. [Install Gloo Gateway Enterprise]({{% versioned_link_path fromRoot="/installation/enterprise/" %}}) in a Kubernetes cluster.
 2. Deploy the [petstore example app]({{% versioned_link_path fromRoot="/guides/traffic_management/hello_world/" %}}).
 3. Optional: If you have not already, review the [conceptual information about the WAF filter](#about-web-application-firewalls), including ModSecurity rule sets, the WAF API, and the example WAF configuration.
 
@@ -90,7 +86,7 @@ You can configure ModSecurity rule sets in the following resources:
 
 The precedence for rules is the route, then the virtual service, and then the HTTP gateway.
 
-The configuration of the WAF filter in the three resources is very similar and follows the same pattern as other enterprise features in Gloo Edge.
+The configuration of the WAF filter in the three resources is very similar and follows the same pattern as other enterprise features in Gloo Gateway.
 
 ### HTTP gateway
 
@@ -184,7 +180,7 @@ If you want to set up rules only for a particular app, you can configure the WAF
 
 ### What's next?
 
-Now that you are familiar with how to apply WAF rule sets in Gloo Edge, try out the following more advanced use cases.
+Now that you are familiar with how to apply WAF rule sets in Gloo Gateway, try out the following more advanced use cases.
 * Dynamically apply updates to rule sets by using [Kubernetes configmaps](#dynamic-configmaps).
 * Apply the [OWASP core rule set](#core-rule-set).
 * Restrict access to a specific [IP address or subnet range](#ip-allowlist).
@@ -208,7 +204,7 @@ In the previous examples, you wrote the rule set directly into the WAF filter co
    ```
 2. Create a Kubernetes configmap from your rule set files.
    ```bash
-   kubectl --namespace=gloo-system create configmap wafrulesets --from-file=wafruleset2.conf --from-file=wafruleset.conf 
+   kubectl --namespace=gloo-system create configmap wafruleset --from-file=wafruleset2.conf --from-file=wafruleset.conf 
    ```
 3. Verify that the configmap contains all of your rules. Each filename becomes a separate entry in the `data` section.
 And view this configmap
@@ -299,10 +295,10 @@ And view this configmap
 ## Apply the OWASP core rule set {#core-rule-set}
 
 {{% notice warning %}}
-Using the `rbl` modsecurity rule in Gloo Edge will cause envoy performance issues and should be avoided. If `rbl` blacklisting is a requirement, an [extauth plugin]({{< versioned_link_path fromRoot="/guides/security/auth/extauth/plugin_auth">}}) can be used to query the rbl list and forbid spam IPs.
+Using the `rbl` modsecurity rule in Gloo Gateway will cause envoy performance issues and should be avoided. If `rbl` blacklisting is a requirement, an [extauth plugin]({{< versioned_link_path fromRoot="/guides/security/auth/extauth/plugin_auth">}}) can be used to query the rbl list and forbid spam IPs.
 {{% /notice %}}
 
-As mentioned earlier, the main free ModSecurity rule set available is the OWASP Core Rule Set. As with all other rule sets, the Core Rule Set can be applied manually via the rule set configs, Gloo Edge offers an easy way to apply the entire Core Rule Set, and configure it.
+As mentioned earlier, the main free ModSecurity rule set available is the OWASP Core Rule Set. As with all other rule sets, the Core Rule Set can be applied manually via the rule set configs, Gloo Gateway offers an easy way to apply the entire Core Rule Set, and configure it.
 
 In order to apply the Core Rule Set add the following to the default virtual service. Without the coreRuleSet field, the OWASP Core Rule Set files will not be included.
 
@@ -413,7 +409,7 @@ waf:
 
 ## Audit Logging
 
-Audit Logging is supported starting Gloo Edge Enterprise v1.4.0, but it works differently than in other ModSecurity integrations.
+Audit Logging is supported starting Gloo Gateway Enterprise v1.4.0, but it works differently than in other ModSecurity integrations.
 ModSecurity native audit logging is not a good fit for Envoy/Kubernetes cloud native environments.
 ModSecurity has 3 logging engines. They are not a good fit for the following reasons:
 1. Serial - all logs written to one file, which globally locks on each write. This will be horrendous
@@ -432,7 +428,7 @@ of envoy's access logging. This means that directives that configure the audit e
 This is **intentional** - to make sure that ModSecurity doesn't degrade
 envoy performance. While the way we emit the logs is different, you have _all the features_ that 
 ModSecurity audit-logging provides:
-- You can use the `action` property of the [audit logging configuration]({{% versioned_link_path fromRoot="/reference/api/github.com/solo-io/gloo/projects/gloo/api/external/envoy/extensions/waf/waf.proto.sk/#auditlogging" %}}) instead of [SecAuditEngine](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-%28v2.x%29#SecAuditEngine) to choose when to log.
+- You can use the `action` property of the audit logging configuration instead of [SecAuditEngine](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-%28v2.x%29#SecAuditEngine) to choose when to log.
 - You can still use the [SecAuditLogParts](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-%28v2.x%29#SecAuditLogParts), 
 [SecAuditLogRelevantStatus](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-%28v2.x%29#SecAuditLogRelevantStatus) and (assuming action is RELEVANT_ONLY) `noauditlog` features of ModSecurity.
 - The format of the log is controlled by [SecAuditLogFormat](https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-%28v2.x%29#SecAuditLogFormat).
@@ -440,7 +436,7 @@ ModSecurity audit-logging provides:
 As envoy access logs have their own filtering mechanism built in, we provide two methods of exposing the audit logs via the access logs. Each method has different CPU/Memory trade-offs.
 
 - DynamicMetadata - This processes the audit log eagerly every time it is required. This may increase CPU
-as the audit log will be computed even if envoy doesn't end-up logging it. To use, place `%DYNAMIC_METADATA("io.solo.filters.http.modsecurity:audit_log")%` in the access log.
+as the audit log will be computed even if envoy doesn't end-up logging it. To use, place `%DYNAMIC_METADATA(io.solo.filters.http.modsecurity:audit_log)%` in the access log.
 - FilterState - this will only generate an AuditLog lazily - only if the envoy access log is about to log it. This will use
 less CPU if the message is not logged, but may use more memory, as the ModSecurity transaction 
 will linger in memory longer. To use, place `%FILTER_STATE(io.solo.modsecurity.audit_log)%` in the access log.
@@ -454,8 +450,7 @@ is better for your specific use-case.
 
 Let's see this in action!
 
-To enable audit logging, edit the [auditLogging]({{% versioned_link_path fromRoot="/reference/api/github.com/solo-io/gloo/projects/gloo/api/external/envoy/extensions/waf/waf.proto.sk/#auditlogging" %}}) field in your 
-[WAF settings]({{% versioned_link_path fromRoot="/reference/api/github.com/solo-io/gloo/projects/gloo/api/v1/enterprise/options/waf/waf.proto.sk/#settings" %}}).
+To enable audit logging, edit the auditLogging field in your WAF settings.
 
 For example, lets edit our `VirtualService` with some
 rules and audit logging:

@@ -1,3 +1,5 @@
+//go:build ignore
+
 package e2e_test
 
 import (
@@ -17,30 +19,32 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/solo-io/gloo/test/services/envoy"
+	"github.com/kgateway-dev/kgateway/test/services/envoy"
 
-	"github.com/solo-io/gloo/test/testutils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 
-	testmatchers "github.com/solo-io/gloo/test/gomega/matchers"
+	testmatchers "github.com/kgateway-dev/kgateway/test/gomega/matchers"
 
-	"github.com/solo-io/gloo/test/v1helpers"
+	"github.com/kgateway-dev/kgateway/test/v1helpers"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/core/matchers"
-	static_plugin_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/static"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gatewaydefaults "github.com/solo-io/gloo/projects/gateway/pkg/defaults"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/ssl"
-	testhelpers "github.com/solo-io/gloo/test/helpers"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/core/matchers"
+	static_plugin_gloo "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/static"
+
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gatewaydefaults "github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/ssl"
+	testhelpers "github.com/kgateway-dev/kgateway/test/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/test/services"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
+
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/services"
 )
 
 var _ = Describe("tunneling", func() {
@@ -149,7 +153,7 @@ var _ = Describe("tunneling", func() {
 			var json = []byte(requestJsonBody)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d/test", "localhost", envoyInstance.HttpPort), bytes.NewBuffer(json))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://%s:%d/test", "localhost", envoyInstance.HttpPort), bytes.NewBuffer(json))
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(http.DefaultClient.Do(req)).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
 				StatusCode: expectedResponseStatusCode,
@@ -400,8 +404,8 @@ func isEof(r *bufio.Reader) bool {
 }
 
 func connectProxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "CONNECT" {
-		http.Error(w, "not connect", 400)
+	if r.Method != http.MethodConnect {
+		http.Error(w, "not connect", http.StatusBadRequest)
 		return
 	}
 
@@ -428,7 +432,7 @@ func connectProxy(w http.ResponseWriter, r *http.Request) {
 
 	targetConn, err := net.Dial("tcp", host)
 	if err != nil {
-		http.Error(w, "can't connect", 500)
+		http.Error(w, "can't connect", http.StatusInternalServerError)
 		return
 	}
 	defer targetConn.Close()

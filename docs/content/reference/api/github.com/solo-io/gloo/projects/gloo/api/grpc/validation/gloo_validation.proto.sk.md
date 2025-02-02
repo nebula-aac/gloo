@@ -1,6 +1,6 @@
 
 ---
-title: "gloo_validation.proto"
+title: "GlooValidation"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [GlooValidationServiceRequest](#gloovalidationservicerequest)
@@ -22,6 +22,8 @@ weight: 5
 - [ProxyReport](#proxyreport)
 - [ListenerReport](#listenerreport)
 - [Error](#error)
+- [Type](#type)
+- [Warning](#warning)
 - [Type](#type)
 - [HttpListenerReport](#httplistenerreport)
 - [Error](#error)
@@ -49,7 +51,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/grpc/validation/gloo_validation.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/grpc/validation/gloo_validation.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/grpc/validation/gloo_validation.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/grpc/validation/gloo_validation.proto)**
 
 
 
@@ -232,6 +234,7 @@ If the report contains no errors, the (sub-)resource is valid.
 
 ```yaml
 "errors": []gloo.solo.io.ListenerReport.Error
+"warnings": []gloo.solo.io.ListenerReport.Warning
 "httpListenerReport": .gloo.solo.io.HttpListenerReport
 "tcpListenerReport": .gloo.solo.io.TcpListenerReport
 "hybridListenerReport": .gloo.solo.io.HybridListenerReport
@@ -242,6 +245,7 @@ If the report contains no errors, the (sub-)resource is valid.
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `errors` | [[]gloo.solo.io.ListenerReport.Error](../gloo_validation.proto.sk/#error) | errors on top-level config of the listener. |
+| `warnings` | [[]gloo.solo.io.ListenerReport.Warning](../gloo_validation.proto.sk/#warning) | warnings on the top-levelconfig of the listener. |
 | `httpListenerReport` | [.gloo.solo.io.HttpListenerReport](../gloo_validation.proto.sk/#httplistenerreport) | report for the http listener. Only one of `httpListenerReport`, `tcpListenerReport`, `hybridListenerReport`, or `aggregateListenerReport` can be set. |
 | `tcpListenerReport` | [.gloo.solo.io.TcpListenerReport](../gloo_validation.proto.sk/#tcplistenerreport) | report for the tcp listener. Only one of `tcpListenerReport`, `httpListenerReport`, `hybridListenerReport`, or `aggregateListenerReport` can be set. |
 | `hybridListenerReport` | [.gloo.solo.io.HybridListenerReport](../gloo_validation.proto.sk/#hybridlistenerreport) | report for the hybrid listener. Only one of `hybridListenerReport`, `httpListenerReport`, `tcpListenerReport`, or `aggregateListenerReport` can be set. |
@@ -286,6 +290,38 @@ error types for top-level listener config
 
 
 ---
+### Warning
+
+ 
+warning types for the given listener config
+
+```yaml
+"type": .gloo.solo.io.ListenerReport.Warning.Type
+"reason": string
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `type` | [.gloo.solo.io.ListenerReport.Warning.Type](../gloo_validation.proto.sk/#type) | the type of the error. |
+| `reason` | `string` | any extra info as a string. |
+
+
+
+
+---
+### Type
+
+
+
+| Name | Description |
+| ----- | ----------- | 
+| `SSLConfigWarning` |  |
+
+
+
+
+---
 ### HttpListenerReport
 
 
@@ -313,6 +349,7 @@ error types for top-level http listener config
 ```yaml
 "type": .gloo.solo.io.HttpListenerReport.Error.Type
 "reason": string
+"metadata": .gloo.solo.io.SourceMetadata
 
 ```
 
@@ -320,6 +357,7 @@ error types for top-level http listener config
 | ----- | ---- | ----------- | 
 | `type` | [.gloo.solo.io.HttpListenerReport.Error.Type](../gloo_validation.proto.sk/#type) | the type of the error. |
 | `reason` | `string` | any extra info as a string. |
+| `metadata` | [.gloo.solo.io.SourceMetadata](../../../v1/proxy.proto.sk/#sourcemetadata) | Source metadata for the HttpListenerReport, can be used by external components to associate sources with the HttpListenerError. |
 
 
 
@@ -364,6 +402,7 @@ error types for top-level virtual host config
 ```yaml
 "type": .gloo.solo.io.VirtualHostReport.Error.Type
 "reason": string
+"metadata": .gloo.solo.io.SourceMetadata
 
 ```
 
@@ -371,6 +410,7 @@ error types for top-level virtual host config
 | ----- | ---- | ----------- | 
 | `type` | [.gloo.solo.io.VirtualHostReport.Error.Type](../gloo_validation.proto.sk/#type) | the type of the error. |
 | `reason` | `string` | any extra info as a string. |
+| `metadata` | [.gloo.solo.io.SourceMetadata](../../../v1/proxy.proto.sk/#sourcemetadata) | Source metadata for the VirtualHostReport, can be used by external components to associate sources with the VirtualHostError. |
 
 
 
@@ -418,6 +458,7 @@ error types for the given route config
 ```yaml
 "type": .gloo.solo.io.RouteReport.Error.Type
 "reason": string
+"metadata": .gloo.solo.io.SourceMetadata
 
 ```
 
@@ -425,6 +466,7 @@ error types for the given route config
 | ----- | ---- | ----------- | 
 | `type` | [.gloo.solo.io.RouteReport.Error.Type](../gloo_validation.proto.sk/#type) | the type of the error. |
 | `reason` | `string` | any extra info as a string. |
+| `metadata` | [.gloo.solo.io.SourceMetadata](../../../v1/proxy.proto.sk/#sourcemetadata) | Source metadata for the RouteReport, can be used by external components to associate sources with the RouteError. |
 
 
 

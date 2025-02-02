@@ -1,3 +1,5 @@
+//go:build ignore
+
 package matchers
 
 import (
@@ -13,9 +15,7 @@ import (
 	"github.com/onsi/gomega/types"
 )
 
-var (
-	_ types.GomegaMatcher = new(HaveHttpResponseMatcher)
-)
+var _ types.GomegaMatcher = new(HaveHttpResponseMatcher)
 
 // HaveOkResponse expects a http response with a 200 status code
 func HaveOkResponse() types.GomegaMatcher {
@@ -55,6 +55,14 @@ func HaveOkResponseWithHeaders(headers map[string]interface{}) types.GomegaMatch
 	})
 }
 
+// HaveOKResponseWithJSONContains expects a 200 response with a body that contains the provided JSON
+func HaveOKResponseWithJSONContains(jsonBody []byte) types.GomegaMatcher {
+	return HaveHttpResponse(&HttpResponse{
+		StatusCode: http.StatusOK,
+		Body:       JSONContains(jsonBody),
+	})
+}
+
 // HttpResponse defines the set of properties that we can validate from an http.Response
 type HttpResponse struct {
 	// StatusCode is the expected status code for an http.Response
@@ -73,16 +81,26 @@ type HttpResponse struct {
 	Custom types.GomegaMatcher
 }
 
-// HaveHttpResponse returns a GomegaMatcher which validates that an http.Response contains
-// particular expected properties (status, body..etc)
-// If an expected body isn't defined, we default to expecting an empty response
-func HaveHttpResponse(expected *HttpResponse) types.GomegaMatcher {
-	expectedBody := expected.Body
-	if expectedBody == nil {
-		// Default to an empty body
-		expectedBody = ""
+func (r *HttpResponse) String() string {
+	var bodyString string
+	switch bodyMatcher := r.Body.(type) {
+	case string:
+		bodyString = bodyMatcher
+	case []byte:
+		bodyString = string(bodyMatcher)
+	case types.GomegaMatcher:
+		bodyString = fmt.Sprintf("%#v", bodyMatcher)
 	}
 
+	return fmt.Sprintf("HttpResponse{StatusCode: %d, Body: %s, Headers: %v, Custom: %v}",
+		r.StatusCode, bodyString, r.Headers, r.Custom)
+
+}
+
+// HaveHttpResponse returns a GomegaMatcher which validates that an http.Response contains
+// particular expected properties (status, body..etc)
+// If an expected body isn't specified, the body is not matched
+func HaveHttpResponse(expected *HttpResponse) types.GomegaMatcher {
 	expectedCustomMatcher := expected.Custom
 	if expected.Custom == nil {
 		// Default to an always accept matcher
@@ -95,9 +113,11 @@ func HaveHttpResponse(expected *HttpResponse) types.GomegaMatcher {
 			expected.StatusCode,
 		},
 	})
-	partialResponseMatchers = append(partialResponseMatchers, &matchers.HaveHTTPBodyMatcher{
-		Expected: expectedBody,
-	})
+	if expected.Body != nil {
+		partialResponseMatchers = append(partialResponseMatchers, &matchers.HaveHTTPBodyMatcher{
+			Expected: expected.Body,
+		})
+	}
 	for headerName, headerMatch := range expected.Headers {
 		partialResponseMatchers = append(partialResponseMatchers, &matchers.HaveHTTPHeaderWithValueMatcher{
 			Header: headerName,
@@ -158,7 +178,7 @@ func (m *HaveHttpResponseMatcher) NegatedFailureMessage(actual interface{}) (mes
 // To help developers, we print more details in this function.
 // NOTE: Printing the actual http.Response is challenging (since the body has already been read), so for now
 // we do not print it.
-func informativeComparison(expected, actual interface{}) string {
+func informativeComparison(expected, _ interface{}) string {
 	expectedJson, _ := json.MarshalIndent(expected, "", "  ")
 
 	return fmt.Sprintf("\nexpected: %s", expectedJson)

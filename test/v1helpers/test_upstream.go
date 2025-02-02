@@ -1,3 +1,5 @@
+//go:build ignore
+
 package v1helpers
 
 import (
@@ -9,25 +11,28 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/solo-io/gloo/test/gomega/matchers"
+	"github.com/kgateway-dev/kgateway/test/gomega/matchers"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/mccutchen/go-httpbin/v2/httpbin"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	static_plugin_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/static"
-	"github.com/solo-io/gloo/test/helpers"
-	testgrpcservice "github.com/solo-io/gloo/test/v1helpers/test_grpc_service"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	static_plugin_gloo "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/static"
+	"github.com/kgateway-dev/kgateway/test/helpers"
+	testgrpcservice "github.com/kgateway-dev/kgateway/test/v1helpers/test_grpc_service"
 )
 
 // TestUpstream is a testing utility (used in in-memory e2e tests) to compose the following concepts:
@@ -119,6 +124,23 @@ func NewTestHttpUpstreamWithReplyAndHealthReply(ctx context.Context, addr, reply
 	return newTestUpstream(addr, []uint32{backendPort}, requests, responses)
 }
 
+// NewTestHttpUpstreamWithHandler creates a test upstream that routes to a server that responds
+// with the provided http.Handler.
+func NewTestHttpUpstreamWithHandler(handler http.Handler) func(ctx context.Context, addr string) *TestUpstream {
+	return func(ctx context.Context, addr string) *TestUpstream {
+		backendPort, requests, responses := runTestServerWithHttpHandler(ctx, NO_TLS, handler)
+		return newTestUpstream(addr, []uint32{backendPort}, requests, responses)
+	}
+}
+
+// NewTestHttpUpstreamWithHttpbin creates a test upstream that routes to a server that responds with go-httpbin.
+// HTTPBin (https://httpbin.org/) provides common introspection endpoints and responses
+// that can be used to simulate a variety of common HTTP behaviors.
+func NewTestHttpUpstreamWithHttpbin(ctx context.Context, addr string) *TestUpstream {
+	backendPort, requests, responses := runTestServerWithHttpHandler(ctx, NO_TLS, httpbin.New())
+	return newTestUpstream(addr, []uint32{backendPort}, requests, responses)
+}
+
 func NewTestHttpsUpstreamWithReply(ctx context.Context, addr, reply string) *TestUpstream {
 	backendPort, requests, responses := runTestServer(ctx, reply, TLS)
 	return newTestUpstream(addr, []uint32{backendPort}, requests, responses)
@@ -133,12 +155,19 @@ func NewTestGRPCUpstream(ctx context.Context, addr string, replicas int) *TestUp
 	returned := make(chan *ReturnedResponse, 100)
 	for _, srv := range grpcServices {
 		srv := srv
-		go func() {
+		go func(serveCtx context.Context) {
 			defer GinkgoRecover()
-			for r := range srv.C {
-				received <- &ReceivedRequest{GRPCRequest: r, Port: srv.Port}
+
+			for {
+				select {
+				case <-serveCtx.Done():
+					// context was cancelled, stop handling requests
+					return
+				case r := <-srv.C:
+					received <- &ReceivedRequest{GRPCRequest: r, Port: srv.Port}
+				}
 			}
-		}()
+		}(ctx)
 	}
 	ports := make([]uint32, 0, len(grpcServices))
 	for _, v := range grpcServices {
@@ -255,6 +284,94 @@ func runTestServerWithHealthReply(ctx context.Context, reply, healthReply string
 	go func() {
 		defer GinkgoRecover()
 		h := &http.Server{Handler: mux}
+
+		go func() {
+			defer GinkgoRecover()
+			if err := h.Serve(listener); err != nil {
+				if err != http.ErrServerClosed {
+					panic(err)
+				}
+			}
+		}()
+
+		<-ctx.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		_ = h.Shutdown(ctx)
+		cancel()
+		// close channel, the http handler may panic but this should be caught by the http code.
+		close(reqChan)
+	}()
+	return uint32(port), reqChan, respChan
+}
+
+// runTestServerWithHttpHandler starts a local server listening on a random port
+// that hands requests off to the provided http.Handler.
+func runTestServerWithHttpHandler(ctx context.Context, tlsServer UpstreamTlsRequired,
+	handler http.Handler) (uint32, <-chan *ReceivedRequest, <-chan *ReturnedResponse) {
+
+	reqChan := make(chan *ReceivedRequest, 100)
+	respChan := make(chan *ReturnedResponse, 100)
+
+	handlerFunc := func(rw http.ResponseWriter, r *http.Request) {
+		// copy the request to the request channel
+		var rr ReceivedRequest
+		rr.Method = r.Method
+		var body []byte
+		if r.Body != nil {
+			body, _ = io.ReadAll(r.Body)
+			_ = r.Body.Close()
+			if len(body) != 0 {
+				rr.Body = body
+			}
+		}
+		rr.Method = r.Method
+		rr.Host = r.Host
+		rr.URL = r.URL
+		rr.Headers = r.Header
+		reqChan <- &rr
+
+		// create a new recorder to capture the response
+		w := httptest.NewRecorder()
+
+		// run the request through the http.Handler
+		handler.ServeHTTP(w, r)
+
+		// copy the response to the original writer
+		for k, v := range w.Header() {
+			for _, vv := range v {
+				rw.Header().Add(k, vv)
+			}
+		}
+		rw.WriteHeader(w.Code)
+		rw.Write(w.Body.Bytes())
+
+		// copy the response to the response channel
+		var rresp ReturnedResponse
+		rresp.Code = w.Code
+		rresp.Headers = w.Header()
+		rresp.Body = w.Body.Bytes()
+		respChan <- &rresp
+	}
+
+	listener, err := getListener(tlsServer)
+	if err != nil {
+		panic(err)
+	}
+
+	addr := listener.Addr().String()
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		panic(err)
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		defer GinkgoRecover()
+		h := &http.Server{Handler: http.HandlerFunc(handlerFunc)}
 
 		go func() {
 			defer GinkgoRecover()
@@ -441,7 +558,10 @@ func ExpectCurlWithOffset(offset int, request CurlRequest, expectedResponse Curl
 			req.Header.Set(headerName, headerValue)
 		}
 
-		g.Expect(client.Do(req)).Should(matchers.HaveHttpResponse(&matchers.HttpResponse{
+		resp, err := client.Do(req)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		g.Expect(resp).Should(matchers.HaveHttpResponse(&matchers.HttpResponse{
 			StatusCode: expectedResponse.Status,
 			Body:       expectedResponse.Message,
 		}))

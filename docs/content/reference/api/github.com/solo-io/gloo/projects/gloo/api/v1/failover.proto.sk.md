@@ -1,6 +1,6 @@
 
 ---
-title: "failover.proto"
+title: "Failover"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [Failover](#failover)
@@ -22,7 +22,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/failover.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/failover.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/failover.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/failover.proto)**
 
 
 
@@ -88,7 +88,7 @@ the list, first being `0` through `n-1`.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
-| `overprovisioningFactor` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | Priority levels and localities are considered overprovisioned with this factor (in percentage). This means that we don't consider a priority level or locality unhealthy until the fraction of healthy hosts multiplied by the overprovisioning factor drops below 100. With the default value 140(1.4), Envoy doesn't consider a priority level or a locality unhealthy until their percentage of healthy hosts drops below 72%. For example: .. code-block:: json { "overprovisioning_factor": 100 } Read more at :ref:`priority levels <arch_overview_load_balancing_priority_levels>` and :ref:`localities <arch_overview_load_balancing_locality_weighted_lb>`. |
+| `overprovisioningFactor` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | Priority levels and localities are considered overprovisioned with this factor (in percentage). This means that we don't consider a priority level or locality unhealthy until the fraction of healthy hosts multiplied by the overprovisioning factor drops below 100. With the default value 140(1.4), Envoy doesn't consider a priority level or a locality unhealthy until their percentage of healthy hosts drops below 72%. For example: .. code-block:: json { "overprovisioning_factor": 100 } Read more at priority levels and localities. |
 
 
 
@@ -130,6 +130,7 @@ An Endpoint that Envoy can route traffic to.
 "healthCheckConfig": .gloo.solo.io.LbEndpoint.HealthCheckConfig
 "upstreamSslConfig": .gloo.solo.io.UpstreamSslConfig
 "loadBalancingWeight": .google.protobuf.UInt32Value
+"metadata": map<string, .google.protobuf.Struct>
 
 ```
 
@@ -140,6 +141,7 @@ An Endpoint that Envoy can route traffic to.
 | `healthCheckConfig` | [.gloo.solo.io.LbEndpoint.HealthCheckConfig](../failover.proto.sk/#healthcheckconfig) | The optional health check configuration is used as configuration for the health checker to contact the health checked host. This takes into effect only for upstreams with active health checking enabled. |
 | `upstreamSslConfig` | [.gloo.solo.io.UpstreamSslConfig](../ssl/ssl.proto.sk/#upstreamsslconfig) |  |
 | `loadBalancingWeight` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | The optional load balancing weight of the upstream host; at least 1. Envoy uses the load balancing weight in some of the built in load balancers. The load balancing weight for an endpoint is divided by the sum of the weights of all endpoints in the endpoint's locality to produce a percentage of traffic for the endpoint. This percentage is then further weighted by the endpoint's locality's load balancing weight from LocalityLbEndpoints. If unspecified, each host is presumed to have equal weight in a locality. |
+| `metadata` | `map<string, .google.protobuf.Struct>` | Additional metadata to add to the endpoint. This metadata can be used in upstream HTTP filters or other specific Envoy configurations. The following keys are added by Gloo Edge and are ignored if set: - "envoy.transport_socket_match" - "io.solo.health_checkers.advanced_http". |
 
 
 
@@ -184,7 +186,7 @@ Identifies location of where either Envoy runs or where upstream hosts run.
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `region` | `string` | Region this zone belongs to. |
-| `zone` | `string` | Defines the local service zone where Envoy is running. The meaning of zone is context dependent, e.g. `Availability Zone (AZ) <https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html>`_ on AWS, `Zone <https://cloud.google.com/compute/docs/regions-zones/>`_ on GCP, etc. |
+| `zone` | `string` | Defines the local service zone where Envoy is running. The meaning of zone is context dependent, e.g. [Availability Zone (AZ)](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html) on AWS, [Zone](https://cloud.google.com/compute/docs/regions-zones/) on GCP, etc. |
 | `subZone` | `string` | When used for locality of upstream hosts, this field further splits zone into smaller chunks of sub-zones so they can be load balanced independently. |
 
 

@@ -1,0 +1,15 @@
+Listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.tcp_proxy
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+        cluster: blackhole-cluster
+        statPrefix: default.example-tcp-route-rule-0
+    name: default.example-tcp-route-rule-0
+  name: tcp

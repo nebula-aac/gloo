@@ -15,8 +15,10 @@ spec:
     persistProxySpec: true
     isolateVirtualHostsBySslConfig: false
     validation:
+      fullEnvoyValidation: false
       alwaysAccept: true
       allowWarnings: true
+      warnMissingTlsSecret: true
       serverEnabled: true
       disableTransformationValidation: false
       warnRouteShortCircuiting: false
@@ -34,6 +36,10 @@ spec:
       replaceInvalidRoutes: false
       invalidRouteResponseBody: Gloo Gateway has invalid configuration. Administrators should run `glooctl check` to find and fix config errors.
       invalidRouteResponseCode: 404
+    istioOptions:
+     appendXForwardedHost: true
+     enableAutoMtls: false
+     enableIntegration: false
   kubernetesArtifactSource: {}
   kubernetesConfigSource: {}
   kubernetesSecretSource: {}

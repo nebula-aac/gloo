@@ -1,12 +1,15 @@
+//go:build ignore
+
 package helpers_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/gloosnapshot"
-	"github.com/solo-io/gloo/test/helpers"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
+
+	v1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/gloosnapshot"
+	"github.com/kgateway-dev/kgateway/test/helpers"
 )
 
 var _ = Describe("ScaledSnapshotBuilder", func() {
@@ -14,14 +17,14 @@ var _ = Describe("ScaledSnapshotBuilder", func() {
 		It("generates a snapshot with the expected number of endpoints", func() {
 			snap := helpers.NewScaledSnapshotBuilder().WithEndpointCount(10).Build()
 			Expect(snap.Endpoints).To(HaveLen(10))
-			Expect(snap.Upstreams).To(HaveLen(0))
+			Expect(snap.Upstreams).To(BeEmpty())
 		})
 	})
 
 	When("with upstreams", func() {
 		It("generates a snapshot with the expected number of upstreams", func() {
 			snap := helpers.NewScaledSnapshotBuilder().WithUpstreamCount(10).Build()
-			Expect(snap.Endpoints).To(HaveLen(0))
+			Expect(snap.Endpoints).To(BeEmpty())
 			Expect(snap.Upstreams).To(HaveLen(10))
 		})
 	})
@@ -47,7 +50,7 @@ var _ = Describe("ScaledSnapshotBuilder", func() {
 					WithUpstreamBuilder(helpers.NewUpstreamBuilder().WithUniqueSni()).Build()
 				Expect(snap.Upstreams).To(HaveLen(10))
 				foundSNI := map[string]bool{}
-				for i := 0; i < len(snap.Upstreams); i++ {
+				for i := range len(snap.Upstreams) {
 					Expect(snap.Upstreams[i].SslConfig).NotTo(BeNil())
 					_, ok := foundSNI[snap.Upstreams[i].SslConfig.Sni]
 					Expect(ok).To(BeFalse())

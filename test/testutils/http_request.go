@@ -1,3 +1,5 @@
+//go:build ignore
+
 package testutils
 
 import (
@@ -23,6 +25,7 @@ type HttpRequestBuilder struct {
 	hostname string
 	port     uint32
 	path     string
+	query    string
 
 	body string
 
@@ -60,6 +63,11 @@ func (h *HttpRequestBuilder) WithOptionsMethod() *HttpRequestBuilder {
 	return h
 }
 
+func (h *HttpRequestBuilder) WithMethod(method string) *HttpRequestBuilder {
+	h.method = method
+	return h
+}
+
 func (h *HttpRequestBuilder) WithScheme(scheme string) *HttpRequestBuilder {
 	h.scheme = scheme
 	return h
@@ -77,6 +85,11 @@ func (h *HttpRequestBuilder) WithPort(port uint32) *HttpRequestBuilder {
 
 func (h *HttpRequestBuilder) WithPath(path string) *HttpRequestBuilder {
 	h.path = path
+	return h
+}
+
+func (h *HttpRequestBuilder) WithQuery(query string) *HttpRequestBuilder {
+	h.query = query
 	return h
 }
 
@@ -118,6 +131,19 @@ func (h *HttpRequestBuilder) WithHeader(key, value string) *HttpRequestBuilder {
 	return h
 }
 
+// WithHeaders accepts a map of headers, the values of which are separated by the headerDelimiter
+func (h *HttpRequestBuilder) WithHeaders(headers map[string]string) *HttpRequestBuilder {
+	for key, value := range headers {
+		h.headers[key] = strings.Split(value, headerDelimiter)
+	}
+	return h
+}
+
+// WithAuthorizationBearerToken is syntactic sugar for setting the Authorization header with a Bearer token
+func (h *HttpRequestBuilder) WithAuthorizationBearerToken(token string) *HttpRequestBuilder {
+	return h.WithHeader("Authorization", fmt.Sprintf("Bearer %s", token))
+}
+
 // WithRawHeader accepts multiple header values for a key.
 // Unlike WithHeader, it does not split the value by a headerDelimiter (,) and instead allows for N values to be
 // set as-is.
@@ -153,6 +179,7 @@ func (h *HttpRequestBuilder) Clone() *HttpRequestBuilder {
 	clone.path = h.path
 	clone.body = h.body
 	clone.host = h.host
+	clone.query = h.query
 	clone.headers = make(map[string][]string)
 	for key, value := range h.headers {
 		clone.headers[key] = value
@@ -161,6 +188,8 @@ func (h *HttpRequestBuilder) Clone() *HttpRequestBuilder {
 }
 
 func (h *HttpRequestBuilder) Build() *http.Request {
+	ginkgo.GinkgoHelper()
+
 	if err := h.errorIfInvalid(); err != nil {
 		// We error loudly here
 		// These types of errors are intended to prevent developers from creating resources
@@ -174,10 +203,13 @@ func (h *HttpRequestBuilder) Build() *http.Request {
 		requestBody = bytes.NewBufferString(h.body)
 	}
 
+	if h.query != "" && h.query[0] != '?' {
+		h.query = "?" + h.query
+	}
 	request, err := http.NewRequestWithContext(
 		h.ctx,
 		h.method,
-		fmt.Sprintf("%s://%s:%d/%s", h.scheme, h.hostname, h.port, h.path),
+		fmt.Sprintf("%s://%s:%d/%s%s", h.scheme, h.hostname, h.port, h.path, h.query),
 		requestBody)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "generating http request")
 

@@ -1,34 +1,40 @@
+//go:build ignore
+
 package gloo_test
 
 import (
 	"context"
 	"net"
-	"os"
-	"os/exec"
-	"strconv"
 	"sync"
 	"time"
 
-	"github.com/solo-io/gloo/pkg/utils/settingsutil"
+	"github.com/kgateway-dev/kgateway/pkg/utils/kubeutils"
+	"github.com/kgateway-dev/kgateway/pkg/utils/kubeutils/portforward"
 
-	"github.com/solo-io/gloo/pkg/bootstrap/leaderelector"
-	"github.com/solo-io/gloo/pkg/bootstrap/leaderelector/singlereplica"
-	"github.com/solo-io/gloo/pkg/utils/setuputils"
-	"github.com/solo-io/gloo/projects/gloo/pkg/syncer/setup"
+	"github.com/kgateway-dev/kgateway/pkg/utils/settingsutil"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/defaults"
+	"github.com/kgateway-dev/kgateway/pkg/bootstrap/leaderelector"
+	"github.com/kgateway-dev/kgateway/pkg/bootstrap/leaderelector/singlereplica"
+	"github.com/kgateway-dev/kgateway/pkg/utils/setuputils"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/bootstrap"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/syncer/setup"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/xds"
+
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
+
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/defaults"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/grpc/validation"
-	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/test/kube2e"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/kube"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/memory"
 	"github.com/solo-io/solo-kit/pkg/utils/prototime"
 	"google.golang.org/grpc"
+
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/grpc/validation"
+	v1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/kube2e"
 )
 
 var _ = Describe("Setup Syncer", func() {
@@ -44,7 +50,8 @@ var _ = Describe("Setup Syncer", func() {
 	// In our tests we do not follow this pattern, and to avoid data races (that cause test failures)
 	// we ensure that only 1 SetupFunc is ever called at a time
 	newSynchronizedSetupFunc := func() setuputils.SetupFunc {
-		setupFunc := setup.NewSetupFunc()
+		setupOpts := bootstrap.NewSetupOpts(xds.NewAdsSnapshotCache(ctx), nil)
+		setupFunc := setup.NewSetupFunc(setupOpts)
 
 		var synchronizedSetupFunc setuputils.SetupFunc
 		synchronizedSetupFunc = func(setupCtx context.Context, kubeCache kube.SharedCache, inMemoryCache memory.InMemoryResourceCache, settings *v1.Settings, identity leaderelector.Identity) error {
@@ -113,52 +120,41 @@ var _ = Describe("Setup Syncer", func() {
 			}).NotTo(Panic())
 		})
 
-		setupTestGrpcClient := func() func() error {
-			var cc *grpc.ClientConn
-			var err error
-			Eventually(func() error {
-				cc, err = grpc.DialContext(ctx, "localhost:9988", grpc.WithInsecure(), grpc.WithBlock(), grpc.FailOnNonTempDialError(true))
-				return err
-			}, "10s", "1s").Should(BeNil())
-			// setup a gRPC client to make sure connection is persistent across invocations
-			client := validation.NewGlooValidationServiceClient(cc)
-			req := &validation.GlooValidationServiceRequest{Proxy: &v1.Proxy{Listeners: []*v1.Listener{{Name: "test-listener"}}}}
-			return func() error {
-				_, err := client.Validate(ctx, req)
-				return err
-			}
-		}
-
-		startPortFwd := func() *os.Process {
-			validationPort := strconv.Itoa(defaults.GlooValidationPort)
-			portFwd := exec.Command("kubectl", "port-forward", "-n", namespace,
-				"deployment/gloo", validationPort)
-			portFwd.Stdout = os.Stderr
-			portFwd.Stderr = os.Stderr
-			err := portFwd.Start()
-			Expect(err).ToNot(HaveOccurred())
-			return portFwd.Process
-		}
-
 		It("restarts validation grpc server when settings change", func() {
-			// setup port forward
-			portFwdProc := startPortFwd()
+			portForwarder, err := testHelper.StartPortForward(ctx,
+				portforward.WithDeployment(kubeutils.GlooDeploymentName, testHelper.InstallNamespace),
+				portforward.WithRemotePort(defaults.GlooValidationPort),
+			)
+			Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				if portFwdProc != nil {
-					portFwdProc.Kill()
-				}
+				portForwarder.Close()
+				portForwarder.WaitForStop()
 			}()
 
-			testFunc := setupTestGrpcClient()
-			err := testFunc()
+			cc, err := grpc.DialContext(ctx, portForwarder.Address(), grpc.WithInsecure())
 			Expect(err).NotTo(HaveOccurred())
+			validationClient := validation.NewGlooValidationServiceClient(cc)
+			validationRequest := &validation.GlooValidationServiceRequest{
+				Proxy: &v1.Proxy{
+					Listeners: []*v1.Listener{
+						{Name: "test-listener"},
+					},
+				},
+			}
+
+			Eventually(func(g Gomega) {
+				_, err := validationClient.Validate(ctx, validationRequest)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, "10s", "1s").Should(Succeed(), "validation request should succeed")
 
 			kube2e.UpdateSettings(ctx, func(settings *v1.Settings) {
 				settings.Gateway.Validation.ValidationServerGrpcMaxSizeBytes = &wrappers.Int32Value{Value: 1}
-			}, namespace)
+			}, testHelper.InstallNamespace)
 
-			err = testFunc()
-			Expect(err.Error()).To(ContainSubstring("received message larger than max (19 vs. 1)"))
+			Eventually(func(g Gomega) {
+				_, err := validationClient.Validate(ctx, validationRequest)
+				g.Expect(err).To(MatchError(ContainSubstring("received message larger than max (19 vs. 1)")))
+			}, "10s", "1s").Should(Succeed(), "validation request should fail")
 		})
 	})
 })

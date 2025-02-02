@@ -1,0 +1,40 @@
+name: Unit Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
+
+env:
+  VERSION: '1.0.0-ci1'
+  GITHUB_TOKEN: ${{ github.token }}
+
+jobs:
+  # Runs the unit tests for `projects/gateway2`
+  kube_gateway_project:
+    name: projects/gateway2
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Build
+      run: go build -v ./projects/gateway2/...
+    - name: Install Test Utils
+      shell: bash
+      run: make -C ./projects/gateway2/ install-go-tools
+    - name: Run Tests
+      shell: bash
+      env:
+        TEST_PKG: "./projects/gateway2/..."
+      run: make go-test-with-coverage
+    - name: Validate Test Coverage
+      shell: bash
+      # The make will error if test coverage drops below a certain threshold
+      # We intentionally ignore the errors while we build out our test coverage, to establish a good baseline
+      # However, we should strive to establish a baseline, and then make it required on PRs
+      run: make --always-make --ignore-errors validate-test-coverage

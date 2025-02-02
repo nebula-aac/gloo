@@ -1,3 +1,5 @@
+//go:build ignore
+
 package kube2e
 
 import (
@@ -7,30 +9,25 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/solo-io/gloo/test/testutils"
-
-	"github.com/onsi/ginkgo/v2"
-	"github.com/solo-io/go-utils/stats"
-
-	"github.com/solo-io/gloo/test/gomega/assertions"
-
-	"github.com/solo-io/gloo/test/kube2e/upgrade"
-
-	"go.uber.org/zap/zapcore"
-
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/solo-io/gloo/projects/gloo/cli/pkg/cmd/check"
-	"github.com/solo-io/gloo/projects/gloo/cli/pkg/cmd/options"
-	clienthelpers "github.com/solo-io/gloo/projects/gloo/cli/pkg/helpers"
-	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/k8s-utils/kubeutils"
-	"github.com/solo-io/k8s-utils/testutils/helper"
-	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
-	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
-
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	errors "github.com/rotisserie/eris"
-	"k8s.io/client-go/kubernetes"
+	"github.com/solo-io/go-utils/stats"
+	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
+	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
+	"go.uber.org/zap/zapcore"
+
+	"github.com/kgateway-dev/kgateway/pkg/utils/fsutils"
+	"github.com/kgateway-dev/kgateway/projects/gloo/cli/pkg/cmd/check"
+	"github.com/kgateway-dev/kgateway/projects/gloo/cli/pkg/cmd/options"
+	clienthelpers "github.com/kgateway-dev/kgateway/projects/gloo/cli/pkg/helpers"
+	"github.com/kgateway-dev/kgateway/projects/gloo/cli/pkg/printers"
+	v1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/gomega/assertions"
+	"github.com/kgateway-dev/kgateway/test/kube2e/helper"
+	newhelper "github.com/kgateway-dev/kgateway/test/kubernetes/testutils/helper"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 )
 
 const (
@@ -44,33 +41,25 @@ const (
 func GetHttpEchoImage() string {
 	httpEchoImage := "hashicorp/http-echo"
 	if runtime.GOARCH == "arm64" {
-		httpEchoImage = "gcr.io/solo-test-236622/http-echo"
+		httpEchoImage = "gcr.io/solo-test-236622/http-echo:0.2.4"
 	}
 	return httpEchoImage
 }
 
-func MustKubeClient() kubernetes.Interface {
-	restConfig, err := kubeutils.GetConfig("", "")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	kubeClient, err := kubernetes.NewForConfig(restConfig)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	return kubeClient
-}
-
 // GlooctlCheckEventuallyHealthy will run up until proved timeoutInterval or until gloo is reported as healthy
-func GlooctlCheckEventuallyHealthy(offset int, testHelper *helper.SoloTestHelper, timeoutInterval string) {
+func GlooctlCheckEventuallyHealthy(offset int, namespace string, timeoutInterval string) {
 	EventuallyWithOffset(offset, func() error {
 		contextWithCancel, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		opts := &options.Options{
 			Metadata: core.Metadata{
-				Namespace: testHelper.InstallNamespace,
+				Namespace: namespace,
 			},
 			Top: options.Top{
 				Ctx: contextWithCancel,
 			},
 		}
-		err := check.CheckResources(opts)
+		err := check.CheckResources(contextWithCancel, printers.P{}, opts)
 		if err != nil {
 			return errors.Wrap(err, "glooctl check detected a problem with the installation")
 		}
@@ -88,6 +77,8 @@ func EventuallyReachesConsistentState(installNamespace string) {
 	}
 
 	// Gloo components are configured to log to the Info level by default
+	// Note that for new style e2e tests (i.e. package `test/kubernetes`) we run them with debug logging
+	// so failures can be appropriately triaged after the fact
 	logLevelAssertion := assertions.LogLevelAssertion(zapcore.InfoLevel)
 
 	// The emitter at some point should stabilize and not continue to increase the number of snapshots produced
@@ -116,6 +107,13 @@ func UpdateAlwaysAcceptSetting(ctx context.Context, alwaysAccept bool, installNa
 	UpdateSettings(ctx, func(settings *v1.Settings) {
 		Expect(settings.GetGateway().GetValidation()).NotTo(BeNil())
 		settings.GetGateway().GetValidation().AlwaysAccept = &wrappers.BoolValue{Value: alwaysAccept}
+	}, installNamespace)
+}
+
+func UpdateAllowWarningsSetting(ctx context.Context, allowWarnings bool, installNamespace string) {
+	UpdateSettings(ctx, func(settings *v1.Settings) {
+		Expect(settings.GetGateway().GetValidation()).NotTo(BeNil())
+		settings.GetGateway().GetValidation().AllowWarnings = &wrappers.BoolValue{Value: allowWarnings}
 	}, installNamespace)
 }
 
@@ -158,26 +156,23 @@ func UpdateSettingsWithPropagationDelay(updateSettings func(settings *v1.Setting
 }
 
 func ToFile(content string) string {
-	f, err := os.CreateTemp("", "")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	n, err := f.WriteString(content)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	ExpectWithOffset(1, n).To(Equal(len(content)))
-	_ = f.Close()
-	return f.Name()
+	fname, err := fsutils.ToTempFile(content)
+	Expect(err).ToNot(HaveOccurred())
+
+	return fname
 }
 
-// https://github.com/solo-io/gloo/issues/4043#issuecomment-772706604
-// We should move tests away from using the testrunner, and instead depend on EphemeralContainers.
+// https://github.com/kgateway-dev/kgateway/issues/4043#issuecomment-772706604
+// We should move tests away from using the testserver, and instead depend on EphemeralContainers.
 // The default response changed in later kube versions, which caused this value to change.
 // Ideally the test utilities used by Gloo are maintained in the Gloo repo, so I opted to move
 // this constant here.
-// This response is given by the testrunner when the SimpleServer is started
-func GetSimpleTestRunnerHttpResponse() string {
+// This response is given by the testserver from the python2 SimpleHTTPServer
+func TestServerHttpResponse() string {
 	if runtime.GOARCH == "arm64" {
-		return SimpleTestRunnerHttpResponseArm
+		return helper.SimpleHttpResponseArm
 	} else {
-		return SimpleTestRunnerHttpResponse
+		return helper.SimpleHttpResponse
 	}
 }
 
@@ -193,7 +188,7 @@ func GetTestReleasedVersion(ctx context.Context, repoName string) string {
 	}
 
 	if releasedVersion == "LATEST" {
-		_, current, err := upgrade.GetUpgradeVersions(ctx, repoName)
+		_, current, err := newhelper.GetUpgradeVersions(ctx, repoName)
 		Expect(err).NotTo(HaveOccurred())
 		return current.String()
 	}
@@ -206,9 +201,15 @@ func GetTestHelper(ctx context.Context, namespace string) (*helper.SoloTestHelpe
 	if err != nil {
 		return nil, err
 	}
+
+	rootDir := filepath.Join(cwd, "../../..")
+	return GetTestHelperForRootDir(ctx, rootDir, namespace)
+}
+
+func GetTestHelperForRootDir(ctx context.Context, rootDir, namespace string) (*helper.SoloTestHelper, error) {
 	if useVersion := GetTestReleasedVersion(ctx, "gloo"); useVersion != "" {
 		return helper.NewSoloTestHelper(func(defaults helper.TestConfig) helper.TestConfig {
-			defaults.RootDir = filepath.Join(cwd, "../../..")
+			defaults.RootDir = rootDir
 			defaults.HelmChartName = "gloo"
 			defaults.InstallNamespace = namespace
 			defaults.ReleasedVersion = useVersion
@@ -217,7 +218,7 @@ func GetTestHelper(ctx context.Context, namespace string) (*helper.SoloTestHelpe
 		})
 	} else {
 		return helper.NewSoloTestHelper(func(defaults helper.TestConfig) helper.TestConfig {
-			defaults.RootDir = filepath.Join(cwd, "../../..")
+			defaults.RootDir = rootDir
 			defaults.HelmChartName = "gloo"
 			defaults.InstallNamespace = namespace
 			defaults.Verbose = true
@@ -225,68 +226,3 @@ func GetTestHelper(ctx context.Context, namespace string) (*helper.SoloTestHelpe
 		})
 	}
 }
-
-const SimpleTestRunnerHttpResponse = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN"><html>
-<title>Directory listing for /</title>
-<body>
-<h2>Directory listing for /</h2>
-<hr>
-<ul>
-<li><a href="bin/">bin/</a>
-<li><a href="boot/">boot/</a>
-<li><a href="dev/">dev/</a>
-<li><a href="etc/">etc/</a>
-<li><a href="home/">home/</a>
-<li><a href="lib/">lib/</a>
-<li><a href="lib64/">lib64/</a>
-<li><a href="media/">media/</a>
-<li><a href="mnt/">mnt/</a>
-<li><a href="opt/">opt/</a>
-<li><a href="proc/">proc/</a>
-<li><a href="product_name">product_name</a>
-<li><a href="product_uuid">product_uuid</a>
-<li><a href="root/">root/</a>
-<li><a href="root.crt">root.crt</a>
-<li><a href="run/">run/</a>
-<li><a href="sbin/">sbin/</a>
-<li><a href="srv/">srv/</a>
-<li><a href="sys/">sys/</a>
-<li><a href="tmp/">tmp/</a>
-<li><a href="usr/">usr/</a>
-<li><a href="var/">var/</a>
-</ul>
-<hr>
-</body>
-</html>`
-
-const SimpleTestRunnerHttpResponseArm = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN"><html>
-<title>Directory listing for /</title>
-<body>
-<h2>Directory listing for /</h2>
-<hr>
-<ul>
-<li><a href="bin/">bin/</a>
-<li><a href="boot/">boot/</a>
-<li><a href="dev/">dev/</a>
-<li><a href="etc/">etc/</a>
-<li><a href="home/">home/</a>
-<li><a href="lib/">lib/</a>
-<li><a href="lib64/">lib64/</a>
-<li><a href="media/">media/</a>
-<li><a href="mnt/">mnt/</a>
-<li><a href="opt/">opt/</a>
-<li><a href="proc/">proc/</a>
-<li><a href="product_uuid">product_uuid</a>
-<li><a href="root/">root/</a>
-<li><a href="root.crt">root.crt</a>
-<li><a href="run/">run/</a>
-<li><a href="sbin/">sbin/</a>
-<li><a href="srv/">srv/</a>
-<li><a href="sys/">sys/</a>
-<li><a href="tmp/">tmp/</a>
-<li><a href="usr/">usr/</a>
-<li><a href="var/">var/</a>
-</ul>
-<hr>
-</body>
-</html>`

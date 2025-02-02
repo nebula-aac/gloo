@@ -1,3 +1,5 @@
+//go:build ignore
+
 package e2e_test
 
 import (
@@ -11,9 +13,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/solo-io/gloo/test/testutils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 
-	"github.com/solo-io/gloo/test/services/envoy"
+	"github.com/kgateway-dev/kgateway/test/services/envoy"
 
 	errors "github.com/rotisserie/eris"
 
@@ -21,36 +23,40 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/form3tech-oss/jwt-go"
-	aws2 "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/extensions/aws"
-	"github.com/solo-io/gloo/test/helpers"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	aws2 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/external/envoy/extensions/aws"
+	"github.com/kgateway-dev/kgateway/test/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	testmatchers "github.com/solo-io/gloo/test/gomega/matchers"
+
+	testmatchers "github.com/kgateway-dev/kgateway/test/gomega/matchers"
 
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 
-	"github.com/solo-io/gloo/test/services"
+	"github.com/kgateway-dev/kgateway/test/services"
 
-	gw1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gwdefaults "github.com/solo-io/gloo/projects/gateway/pkg/defaults"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/defaults"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/core/matchers"
-	aws_plugin "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/aws"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/hcm"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/transformation"
+	gw1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gwdefaults "github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/defaults"
+
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/core/matchers"
+	aws_plugin "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/aws"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/hcm"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/transformation"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 )
 
 var _ = Describe("AWS Lambda", func() {
 	const (
-		region               = "us-east-1"
+		defaultRegion        = "us-east-1"
+		secondaryRegion      = "us-east-2"
 		webIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE"
 		jwtPrivateKey        = "JWT_PRIVATE_KEY"
 		awsRoleArn           = "AWS_ROLE_ARN"
@@ -95,6 +101,7 @@ var _ = Describe("AWS Lambda", func() {
 		requestBody                     string
 		expectedSubstrings              []string
 		requestHeaders, expectedHeaders http.Header
+		exactExpectedHeaderKeys         []string
 		requestUrl                      *url.URL
 		expectedStatus                  *int
 	}
@@ -143,7 +150,7 @@ var _ = Describe("AWS Lambda", func() {
 			g.Expect(res).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
 				StatusCode: expectedStatus,
 				Body:       testmatchers.ContainSubstrings(params.expectedSubstrings),
-				Custom:     testmatchers.ContainHeaders(params.expectedHeaders),
+				Custom:     And(testmatchers.ContainHeaders(params.expectedHeaders), testmatchers.ContainHeaderKeysExact(params.exactExpectedHeaderKeys)),
 			}))
 
 		}, "30s", "1s").Should(Succeed())
@@ -160,11 +167,11 @@ var _ = Describe("AWS Lambda", func() {
 		upstream = &gloov1.Upstream{
 			Metadata: &core.Metadata{
 				Namespace: "default",
-				Name:      region,
+				Name:      defaultRegion,
 			},
 			UpstreamType: &gloov1.Upstream_Aws{
 				Aws: &aws_plugin.UpstreamSpec{
-					Region:    region,
+					Region:    defaultRegion,
 					SecretRef: secret.Metadata.Ref(),
 				},
 			},
@@ -199,7 +206,7 @@ var _ = Describe("AWS Lambda", func() {
 			},
 			UpstreamType: &gloov1.Upstream_Aws{
 				Aws: &aws_plugin.UpstreamSpec{
-					Region:    region,
+					Region:    defaultRegion,
 					SecretRef: secret.Metadata.Ref(),
 					// this is a separate account ID from the one that all other lambda
 					// functions tested in this file are in
@@ -219,7 +226,9 @@ var _ = Describe("AWS Lambda", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// wait for the upstream to be created
-		helpers.EventuallyResourceAccepted(func() (resources.InputResource, error) {
+		// Upstreams no longer report status if they have not been translated at all to avoid conflicting with
+		// other syncers that have translated them, so we can only detect that the objects exist here
+		helpers.EventuallyResourceExists(func() (resources.Resource, error) {
 			return testClients.UpstreamClient.Read(upstream.Metadata.Namespace, upstream.Metadata.Name, clients.ReadOpts{})
 		}, "30s", "1s")
 	}
@@ -341,6 +350,59 @@ var _ = Describe("AWS Lambda", func() {
 			offset:             1,
 			envoyPort:          envoyInstance.HttpPort,
 			expectedSubstrings: []string{`"\"solo.io\""`},
+		})
+	}
+
+	// this tests the case where a lambda returns non-string values in multiValueHeaders, a case which previously caused
+	// Envoy to return a 500 response
+	// lambda: https://us-east-1.console.aws.amazon.com/lambda/home?region=us-east-1#/functions/non-string-headers-test
+	// expected response:
+	//        'body': json.dumps('test body'),
+	//        'multiValueHeaders': {
+	//            'foo': [
+	//                None,
+	//                "bar",
+	//                123
+	//            ]
+	//        }
+	testProxyWithUnwrapAsApiGatewayNonStringHeaderResponse := func() {
+		err := envoyInstance.RunWithRole(envoy.DefaultProxyName, testClients.GlooPort)
+		Expect(err).NotTo(HaveOccurred())
+
+		createProxy(true, false, false, "non-string-headers-test")
+		validateLambda(lambdaValidationParams{
+			offset:             1,
+			envoyPort:          envoyInstance.HttpPort,
+			expectedSubstrings: []string{`"test body"`},
+			expectedHeaders:    http.Header{"Foo": []string{"null,bar,123"}},
+		})
+	}
+
+	// this tests the case where a lambda returns malformed multiValueHeaders, a case which previously caused Envoy to
+	// return a 500 response
+	// we now expect a 200 response with no body and no headers
+	// the headers are malformed because multiValueHeaders is an object and not an array
+	// lambda: https://us-east-1.console.aws.amazon.com/lambda/home?region=us-east-1#/functions/malformed-headers-test
+	// expected response:
+	//        'body': json.dumps('test body'),
+	//        'multiValueHeaders': {
+	//            'foo': {
+	//                None,
+	//                "bar",
+	//                123
+	//            }
+	//        }
+	testProxyWithUnwrapAsApiGatewayMalformedHeaderResponse := func() {
+		err := envoyInstance.RunWithRole(envoy.DefaultProxyName, testClients.GlooPort)
+		Expect(err).NotTo(HaveOccurred())
+
+		createProxy(true, false, false, "malformed-headers-test")
+		validateLambda(lambdaValidationParams{
+			offset:                  1,
+			envoyPort:               envoyInstance.HttpPort,
+			expectedSubstrings:      []string{"{}"},
+			expectedHeaders:         map[string][]string{},
+			exactExpectedHeaderKeys: []string{"Date", "Server", "Content-Length"},
 		})
 	}
 
@@ -484,7 +546,7 @@ var _ = Describe("AWS Lambda", func() {
 		waitForLambdaAndGetBody := func() error {
 			httpClient := testutils.DefaultClientBuilder().WithTimeout(time.Second * 10).Build()
 
-			req, err := http.NewRequest("POST", fmt.Sprintf("http://%s:%d/%s?foo=bar", "localhost", envoyInstance.HttpPort, path), bytes.NewBufferString(`"test"`))
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/%s?foo=bar", "localhost", envoyInstance.HttpPort, path), bytes.NewBufferString(`"test"`))
 			Expect(err).NotTo(HaveOccurred())
 			req.Header.Set("Content-Type", "application/octet-stream")
 			req.Host = "test"
@@ -544,7 +606,7 @@ var _ = Describe("AWS Lambda", func() {
 			secret = &gloov1.Secret{
 				Metadata: &core.Metadata{
 					Namespace: "default",
-					Name:      region,
+					Name:      defaultRegion,
 				},
 				Kind: &gloov1.Secret_Aws{
 					Aws: &gloov1.AwsSecret{
@@ -569,6 +631,10 @@ var _ = Describe("AWS Lambda", func() {
 			It("should be able to call lambda with response transform", testProxyWithResponseTransform)
 
 			It("should be able to call lambda with unwrapAsApiGateway", testProxyWithUnwrapAsApiGateway)
+
+			It("should be able to call lambda with unwrapAsApiGateway with non-string headers in response", testProxyWithUnwrapAsApiGatewayNonStringHeaderResponse)
+
+			It("should be able to call lambda with unwrapAsApiGateway with malformed headers in response", testProxyWithUnwrapAsApiGatewayMalformedHeaderResponse)
 
 			It("should be able to call lambda with request transform", testProxyWithRequestTransform)
 
@@ -599,7 +665,7 @@ var _ = Describe("AWS Lambda", func() {
 
 		addCredentials := func() {
 			localAwsCredentials := credentials.NewSharedCredentials("", "")
-			sess, err := session.NewSession(&aws.Config{Region: aws.String(region), Credentials: localAwsCredentials})
+			sess, err := session.NewSession(&aws.Config{Region: aws.String(defaultRegion), Credentials: localAwsCredentials})
 			if err != nil {
 				Fail("no AWS creds available")
 			}
@@ -611,7 +677,7 @@ var _ = Describe("AWS Lambda", func() {
 			secret = &gloov1.Secret{
 				Metadata: &core.Metadata{
 					Namespace: "default",
-					Name:      region,
+					Name:      defaultRegion,
 				},
 				Kind: &gloov1.Secret_Aws{
 					Aws: &gloov1.AwsSecret{
@@ -707,7 +773,7 @@ var _ = Describe("AWS Lambda", func() {
 			}
 		}
 
-		addUpstreamSts := func() {
+		addUpstreamSts := func(region string) {
 			upstream = &gloov1.Upstream{
 				Metadata: &core.Metadata{
 					Namespace: "default",
@@ -741,10 +807,18 @@ var _ = Describe("AWS Lambda", func() {
 			}))
 		}
 
-		setupEnvoySts := func(justGloo bool) {
+		setupEnvoySts := func(justGloo bool, region string) {
 			ctx, cancel = context.WithCancel(context.Background())
 
 			envoyInstance = envoyFactory.NewInstance()
+
+			var uri string
+			if region == "" {
+				region = defaultRegion
+				uri = "sts.amazonaws.com"
+			} else {
+				uri = fmt.Sprintf("sts.%s.amazonaws.com", region)
+			}
 
 			ns := defaults.GlooSystem
 			ro := &services.RunOptions{
@@ -759,7 +833,8 @@ var _ = Describe("AWS Lambda", func() {
 							CredentialsFetcher: &gloov1.GlooOptions_AWSOptions_ServiceAccountCredentials{
 								ServiceAccountCredentials: &aws2.AWSLambdaConfig_ServiceAccountCredentials{
 									Cluster: "aws_sts_cluster",
-									Uri:     "sts.amazonaws.com",
+									Uri:     uri,
+									Region:  region,
 								},
 							},
 						},
@@ -783,29 +858,49 @@ var _ = Describe("AWS Lambda", func() {
 			os.Unsetenv(webIdentityTokenFile)
 		})
 		Context("No gateway translation ", func() {
-			BeforeEach(func() {
-				setupEnvoySts(true)
-				addCredentialsSts()
-				addUpstreamSts()
+			Context("primary region", func() {
+				BeforeEach(func() {
+					setupEnvoySts(true, defaultRegion)
+					addCredentialsSts()
+					addUpstreamSts(defaultRegion)
+				})
+				/*
+				 * these tests can start failing if certs get rotated underneath us.
+				 * the fix is to update the rotated thumbprint on our fake AWS OIDC per
+				 * https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html
+				 */
+				It("should be able to call lambda", testProxy)
+
+				It("should be able to call lambda with response transform", testProxyWithResponseTransform)
+
+				It("should be able to call lambda with request transform", testProxyWithRequestTransform)
+
+				It("should be able to call lambda with request and response transforms", testProxyWithRequestAndResponseTransforms)
 			})
-			/*
-			 * these tests can start failing if certs get rotated underneath us.
-			 * the fix is to update the rotated thumbprint on our fake AWS OIDC per
-			 * https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html
-			 */
-			It("should be able to call lambda", testProxy)
+			Context("secondary region", func() {
+				BeforeEach(func() {
+					setupEnvoySts(true, secondaryRegion)
+					addCredentialsSts()
+					addUpstreamSts(secondaryRegion)
+				})
 
-			It("should be able to call lambda with response transform", testProxyWithResponseTransform)
+				It("should be able to call lambda", testProxy)
+			})
+			Context("default region", func() {
+				BeforeEach(func() {
+					setupEnvoySts(true, "")
+					addCredentialsSts()
+					addUpstreamSts(defaultRegion)
+				})
 
-			It("should be able to call lambda with request transform", testProxyWithRequestTransform)
-
-			It("should be able to call lambda with request and response transforms", testProxyWithRequestAndResponseTransforms)
+				It("should be able to call lambda", testProxy)
+			})
 		})
 		Context("With gateway translation", func() {
 			BeforeEach(func() {
-				setupEnvoySts(false)
+				setupEnvoySts(false, defaultRegion)
 				addCredentialsSts()
-				addUpstreamSts()
+				addUpstreamSts(defaultRegion)
 			})
 			It("should be able to call lambda via gateway", testLambdaWithVirtualService)
 

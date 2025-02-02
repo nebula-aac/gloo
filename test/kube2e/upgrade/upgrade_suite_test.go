@@ -1,3 +1,5 @@
+//go:build ignore
+
 package upgrade_test
 
 import (
@@ -6,15 +8,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kgateway-dev/kgateway/pkg/utils/helmutils"
+
 	. "github.com/onsi/gomega"
-	"github.com/solo-io/gloo/test/kube2e"
-	"github.com/solo-io/gloo/test/kube2e/upgrade"
 	"github.com/solo-io/go-utils/versionutils"
 	"github.com/solo-io/skv2/codegen/util"
 
+	"github.com/kgateway-dev/kgateway/test/kube2e"
+	"github.com/kgateway-dev/kgateway/test/kubernetes/testutils/helper"
+
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/solo-io/gloo/test/helpers"
 	skhelpers "github.com/solo-io/solo-kit/test/helpers"
+
+	"github.com/kgateway-dev/kgateway/test/helpers"
 )
 
 func TestUpgrade(t *testing.T) {
@@ -49,17 +55,19 @@ var _ = BeforeSuite(func() {
 	testHelper, err := kube2e.GetTestHelper(suiteCtx, namespace)
 	Expect(err).NotTo(HaveOccurred())
 
-	skhelpers.RegisterPreFailHandler(helpers.KubeDumpOnFail(GinkgoWriter, "upgrade", testHelper.InstallNamespace, "other-ns"))
+	outDir := filepath.Join(util.GetModuleRoot(), "_output", "kube2e-artifacts")
+	namespaces := []string{"upgrade", testHelper.InstallNamespace, "other-ns"}
+	skhelpers.RegisterPreFailHandler(helpers.StandardGlooDumpOnFail(GinkgoWriter, outDir, namespaces))
 
 	crdDir = filepath.Join(util.GetModuleRoot(), "install", "helm", "gloo", "crds")
 	targetReleasedVersion = kube2e.GetTestReleasedVersion(suiteCtx, "gloo")
 
-	chartUri = "gloo/gloo"
+	chartUri = helmutils.RemoteChartName
 	if targetReleasedVersion == "" {
 		chartUri = filepath.Join(testHelper.RootDir, testHelper.TestAssetDir, testHelper.HelmChartName+"-"+testHelper.ChartVersion()+".tgz")
 	}
 
-	LastPatchPreviousMinorVersion, CurrentPatchMostRecentMinorVersion, err = upgrade.GetUpgradeVersions(suiteCtx, "gloo")
+	LastPatchPreviousMinorVersion, CurrentPatchMostRecentMinorVersion, err = helper.GetUpgradeVersions(suiteCtx, "gloo")
 	Expect(err).NotTo(HaveOccurred())
 
 	skipIfFirstMinorFunc = func() {}

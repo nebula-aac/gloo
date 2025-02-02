@@ -1,35 +1,48 @@
+//go:build ignore
+
 package gloo_test
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/kgateway-dev/kgateway/pkg/bootstrap/leaderelector/kube"
+	"github.com/kgateway-dev/kgateway/test/kube2e/helper"
+	kubetestclients "github.com/kgateway-dev/kgateway/test/kubernetes/testutils/clients"
 
 	"github.com/onsi/gomega/gstruct"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/factory"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/kubesecret"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/vault"
+	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 	skhelpers "github.com/solo-io/solo-kit/test/helpers"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/consul/api"
-	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/test/helpers"
-	"github.com/solo-io/gloo/test/services"
-	"github.com/solo-io/k8s-utils/kubeutils"
 	skclients "github.com/solo-io/solo-kit/pkg/api/v1/clients"
 	corecache "github.com/solo-io/solo-kit/pkg/api/v1/clients/kube/cache"
-	kubev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+
+	gatewaydefaults "github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
+	v1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	vault_client "github.com/kgateway-dev/kgateway/projects/gloo/pkg/bootstrap/clients/vault"
+	"github.com/kgateway-dev/kgateway/test/helpers"
+	"github.com/kgateway-dev/kgateway/test/services"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	. "github.com/solo-io/gloo/test/gomega"
+
+	. "github.com/kgateway-dev/kgateway/test/gomega"
 
 	vaultapi "github.com/hashicorp/vault/api"
-	"github.com/solo-io/gloo/projects/gloo/pkg/bootstrap/clients"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/bootstrap/clients"
 )
 
 // Kubernetes tests for clients generated from projects/gloo/pkg/bootstrap/clients
@@ -83,12 +96,11 @@ var _ = Describe("Bootstrap Clients", func() {
 		BeforeEach(func() {
 			var err error
 
-			cfg, err = kubeutils.GetConfig("", "")
-			Expect(err).NotTo(HaveOccurred())
+			cfg = kubetestclients.MustRestConfig()
 			kubeClient = resourceClientset.KubeClients()
 
 			testNamespace = skhelpers.RandString(8)
-			_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &kubev1.Namespace{
+			_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNamespace,
 				},
@@ -112,7 +124,7 @@ var _ = Describe("Bootstrap Clients", func() {
 
 			BeforeEach(func() {
 				_, err := kubeClient.CoreV1().ConfigMaps(testNamespace).Create(ctx,
-					&kubev1.ConfigMap{
+					&corev1.ConfigMap{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "cfg",
 							Namespace: testNamespace,
@@ -165,7 +177,7 @@ var _ = Describe("Bootstrap Clients", func() {
 			kubeCoreCache      corecache.KubeCoreCache
 			secretClient       v1.SecretClient
 			settings           *v1.Settings
-			vaultClientInitMap map[int]clients.VaultClientInitFunc
+			vaultClientInitMap map[int]vault_client.VaultClientInitFunc
 
 			testCtx    context.Context
 			testCancel context.CancelFunc
@@ -181,11 +193,10 @@ var _ = Describe("Bootstrap Clients", func() {
 		// as-is, this function is not idempotent and should be run only once
 		setupKubeSecret := func() {
 			var err error
-			cfg, err = kubeutils.GetConfig("", "")
-			Expect(err).NotTo(HaveOccurred())
+			cfg = kubetestclients.MustRestConfig()
 			kubeClient = resourceClientset.KubeClients()
 
-			_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &kubev1.Namespace{
+			_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNamespace,
 				},
@@ -256,8 +267,8 @@ var _ = Describe("Bootstrap Clients", func() {
 		}
 
 		setVaultClientInitMap := func(idx int, vaultSettings *v1.Settings_VaultSecrets) {
-			vaultClientInitMap[idx] = func() *vaultapi.Client {
-				c, err := clients.VaultClientForSettings(vaultSettings)
+			vaultClientInitMap[idx] = func(ctx context.Context) *vaultapi.Client {
+				c, err := vault_client.VaultClientForSettings(ctx, vaultSettings)
 				Expect(err).NotTo(HaveOccurred())
 				return c
 			}
@@ -285,7 +296,7 @@ var _ = Describe("Bootstrap Clients", func() {
 			settings = &v1.Settings{
 				WatchNamespaces: []string{testNamespace},
 			}
-			vaultClientInitMap = make(map[int]clients.VaultClientInitFunc)
+			vaultClientInitMap = make(map[int]vault_client.VaultClientInitFunc)
 		})
 
 		AfterEach(func() {
@@ -419,4 +430,231 @@ var _ = Describe("Bootstrap Clients", func() {
 			})
 		})
 	})
+
+	Context("Retry leader election failure", func() {
+
+		var deploymentClient clientsv1.DeploymentInterface
+		var verifyTranslation func()
+
+		BeforeEach(func() {
+
+			// TODO (davidjumani) : Fix in a followup - https://solo-io-corp.slack.com/archives/G01EERAK3KJ/p1727966518844649?thread_ts=1727959118.508609&cid=G01EERAK3KJ
+			Skip("Skipping flakey test.")
+
+			deploymentClient = resourceClientset.KubeClients().AppsV1().Deployments(testHelper.InstallNamespace)
+
+			// verifyTranslation creates a VS with a directActionRoute and verifies it has been accepted
+			// and translated by curling against the route specified route
+			verifyTranslation = func() {
+				name := "test-vs"
+				domain := "test-vs-domain"
+				path := "/test"
+				response := "OK"
+
+				testVS := helpers.NewVirtualServiceBuilder().
+					WithName(name).
+					WithNamespace(testHelper.InstallNamespace).
+					WithDomain(domain).
+					WithRoutePrefixMatcher("test", path).
+					WithRouteDirectResponseAction("test", &v1.DirectResponseAction{
+						Status: 200,
+						Body:   response,
+					}).
+					Build()
+
+				resourceClientset.VirtualServiceClient().Write(testVS, skclients.WriteOpts{})
+				// Since the kube api server can be down when the VS is written,
+				// specify a long enough interval for it to be accepted when the kube api server comes back up
+				helpers.EventuallyResourceAccepted(func() (resources.InputResource, error) {
+					return resourceClientset.VirtualServiceClient().Read(testHelper.InstallNamespace, testVS.Metadata.Name, skclients.ReadOpts{})
+				}, "120s", "10s")
+				defer resourceClientset.VirtualServiceClient().Delete(testHelper.InstallNamespace, testVS.Metadata.Name, skclients.DeleteOpts{})
+
+				testHelper.CurlEventuallyShouldRespond(helper.CurlOpts{
+					Protocol:          "http",
+					Method:            "GET",
+					Path:              path,
+					Host:              domain,
+					Service:           gatewaydefaults.GatewayProxyName,
+					Port:              gatewayPort,
+					ConnectionTimeout: 1,
+					WithoutStats:      true,
+				}, response, 1, 60*time.Second, 1*time.Second)
+			}
+		})
+
+		AfterEach(func() {
+			testHelper.ModifyDeploymentEnv(ctx, deploymentClient, testHelper.InstallNamespace, "gloo", 0, corev1.EnvVar{
+				Name:  kube.MaxRecoveryDurationWithoutKubeAPIServer,
+				Value: "",
+			})
+		})
+
+		It("does not recover by default", func() {
+			waitUntilStartsLeading()
+			simulateKubeAPIServerUnavailability()
+
+			// By default it should crash
+			Eventually(func(g Gomega) {
+				logs := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "deploy/gloo")
+				g.Expect(logs).To(ContainSubstring("lost leadership, quitting app"))
+			}, "30s", "1s").Should(Succeed())
+
+			verifyTranslation()
+		})
+
+		It("recovers when MAX_RECOVERY_DURATION_WITHOUT_KUBE_API_SERVER is set", func() {
+			testHelper.ModifyDeploymentEnv(ctx, deploymentClient, testHelper.InstallNamespace, "gloo", 0, corev1.EnvVar{
+				Name: kube.MaxRecoveryDurationWithoutKubeAPIServer,
+				// This invalid value will test whether it falls back to the default value of 60s
+				Value: "abcd",
+			})
+
+			// Since a new deployment has been rolled out by changing the MAX_RECOVERY_DURATION_WITHOUT_KUBE_API_SERVER env var,
+			// we can be sure that the logs fetched were generated only after this test has begun
+			waitUntilStartsLeading()
+
+			// Simulate the kube api server is down and bring it up after 15 seconds. While it is down :
+			// - The leader should lose the lease
+			// - Create a VS
+			// When the kube api server is back up :
+			// - The VS should be accepted
+			// - It should be translated into an envoy config
+			restoreKubeAPIServer := simulateKubeAPIServerDown()
+			go func() {
+				time.Sleep(15 * time.Second)
+				restoreKubeAPIServer()
+			}()
+
+			// This creates a VS and ensures that it is accepted and translated. Run this while the kube api server is down to verify that
+			// reports are written once the pod recovers and becomes a leader
+			verified := make(chan struct{})
+			go func() {
+				verifyTranslation()
+				verified <- struct{}{}
+			}()
+
+			Eventually(func(g Gomega) {
+				logs := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "deploy/gloo")
+				g.Expect(logs).To(ContainSubstring(fmt.Sprintf("%s is not a valid duration. Defaulting to 60s", kube.MaxRecoveryDurationWithoutKubeAPIServer)))
+				g.Expect(logs).To(ContainSubstring("Leader election cycle 0 lost. Trying again"))
+				g.Expect(logs).To(ContainSubstring("recovered from lease renewal failure"))
+				g.Expect(logs).NotTo(ContainSubstring("lost leadership, quitting app"))
+			}, "60s", "1s").Should(Succeed())
+
+			// Wait for the goroutine to finish
+			<-verified
+		})
+
+		// During this test :
+		// - Scale up the deployment to 2 pods
+		// - Block kube api access to the leader pod
+		// - Verify the leader pod loses leadership
+		// - Verify the second pod becomes the leader
+		// - Create a resource and verify it has been translated
+		It("concedes leadership to another pod", func() {
+			testHelper.ModifyDeploymentEnv(ctx, deploymentClient, testHelper.InstallNamespace, "gloo", 0, corev1.EnvVar{
+				Name:  kube.MaxRecoveryDurationWithoutKubeAPIServer,
+				Value: "45s",
+			})
+
+			// Since a new deployment has been rolled out by changing the MAX_RECOVERY_DURATION_WITHOUT_KUBE_API_SERVER env var,
+			// we can be sure that the logs fetched were generated only after this test had begun
+			waitUntilStartsLeading()
+
+			// Get the leader pod. Since there is only one pod it is the leader
+			leader, _, err := testHelper.Execute(ctx, "get", "pods", "-n", testHelper.InstallNamespace, "-l", "gloo=gloo", "-o", "jsonpath='{.items[0].metadata.name}'")
+			Expect(err).ToNot(HaveOccurred())
+			leader = strings.ReplaceAll(leader, "'", "")
+
+			// Scale the deployment to 2 replicas so the other can take over when the leader is unable to communicate with the Kube API server
+			err = testHelper.Scale(ctx, testHelper.InstallNamespace, "deploy/gloo", 2)
+			Expect(err).ToNot(HaveOccurred())
+			defer func() {
+				err = testHelper.Scale(ctx, testHelper.InstallNamespace, "deploy/gloo", 1)
+				Expect(err).ToNot(HaveOccurred())
+			}()
+
+			// Get the follower pod.
+			follower, _, err := testHelper.Execute(ctx, "get", "pods", "-n", testHelper.InstallNamespace, "-l", "gloo=gloo", "-o", "jsonpath='{.items[*].metadata.name}'")
+			Expect(err).ToNot(HaveOccurred())
+			// Before: 'gloo-7bd4788f8c-6qvd8' (leader) 'gloo-7bd4788f8c-qdjn6' (follower)
+			// After: gloo-7bd4788f8c-qdjn6 (follower)
+			follower = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(follower, "'", ""), " ", ""), leader, "")
+
+			// Verify that the follower is indeed not leading
+			Eventually(func(g Gomega) {
+				logs := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "pod/"+follower)
+				g.Expect(logs).To(ContainSubstring("new leader elected with ID: " + leader))
+				g.Expect(logs).ToNot(ContainSubstring("starting leadership"))
+			}, "60s", "1s").Should(Succeed())
+
+			// Label the leader so the network policy can block communication to the Kube API server
+			pod, err := resourceClientset.KubeClients().CoreV1().Pods(testHelper.InstallNamespace).Get(ctx, leader, metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			pod.Labels["block"] = "this"
+			_, err = resourceClientset.KubeClients().CoreV1().Pods(testHelper.InstallNamespace).Update(ctx, pod, metav1.UpdateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Block the leader's communication to the Kube API server
+			err = testHelper.ApplyFile(ctx, testHelper.RootDir+"/test/kube2e/gloo/artifacts/block-labels.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify that the leader has stopped leading
+			Eventually(func(g Gomega) {
+				logs := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "pod/"+leader)
+				g.Expect(logs).To(ContainSubstring("max recovery from kube apiserver unavailability set to 45s"))
+				g.Expect(logs).To(ContainSubstring("lost leadership"))
+			}, "600s", "10s").Should(Succeed())
+
+			// Verify that the follower has become the new leader
+			Eventually(func(g Gomega) {
+				logs := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "pod/"+follower)
+				g.Expect(logs).To(ContainSubstring("starting leadership"))
+			}, "60s", "1s").Should(Succeed())
+
+			// Cleanup the network policy.
+			err = testHelper.DeleteFile(ctx, testHelper.RootDir+"/test/kube2e/gloo/artifacts/block-labels.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			// With connectivity restored, the old leader can become a follower
+			// Verify that the old leader has become a follower
+			Eventually(func(g Gomega) {
+				logs := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "pod/"+leader)
+				g.Expect(logs).To(ContainSubstring("recovered from lease renewal failure"))
+				g.Expect(logs).To(ContainSubstring("new leader elected with ID: " + follower))
+			}, "60s", "1s").Should(Succeed())
+
+			// Ensure that we can still operate.
+			verifyTranslation()
+		})
+	})
 })
+
+// simulateKubeAPIServerDown blocks network connectivity between the gloo pod and the kube api server.
+// It returns a function that restores network connectivity.
+func simulateKubeAPIServerDown() func() {
+	err := testHelper.ApplyFile(ctx, testHelper.RootDir+"/test/kube2e/gloo/artifacts/block-gloo-apiserver.yaml")
+	Expect(err).ToNot(HaveOccurred())
+
+	return func() {
+		err := testHelper.DeleteFile(ctx, testHelper.RootDir+"/test/kube2e/gloo/artifacts/block-gloo-apiserver.yaml")
+		Expect(err).ToNot(HaveOccurred())
+	}
+}
+
+// simulateKubeAPIServerUnavailability temporarily blocks network connectivity between the gloo pod and the kube api server
+func simulateKubeAPIServerUnavailability() {
+	restoreKubeAPIServer := simulateKubeAPIServerDown()
+	time.Sleep(15 * time.Second)
+	restoreKubeAPIServer()
+}
+
+func waitUntilStartsLeading() {
+	// Initially sleep as the new deployment might be rolling out
+	time.Sleep(10 * time.Second)
+	Eventually(func(g Gomega) {
+		out := testHelper.GetContainerLogs(ctx, testHelper.InstallNamespace, "deploy/gloo")
+		g.Expect(out).To(ContainSubstring("starting leadership"))
+	}, "120s", "10s").Should(Succeed())
+}

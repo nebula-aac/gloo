@@ -1,6 +1,6 @@
 
 ---
-title: "settings.proto"
+title: "Settings"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [Settings](#settings) **Top-Level Resource**
@@ -35,10 +35,13 @@ weight: 5
 - [ObservabilityOptions](#observabilityoptions)
 - [GrafanaIntegration](#grafanaintegration)
 - [MetricLabels](#metriclabels)
+- [LabelSelector](#labelselector)
+- [LabelSelectorRequirement](#labelselectorrequirement)
 - [UpstreamOptions](#upstreamoptions)
 - [GlooOptions](#gloooptions)
 - [AWSOptions](#awsoptions)
 - [InvalidConfigPolicy](#invalidconfigpolicy)
+- [IstioOptions](#istiooptions)
 - [VirtualServiceOptions](#virtualserviceoptions)
 - [GatewayOptions](#gatewayoptions)
 - [ValidationOptions](#validationoptions)
@@ -50,7 +53,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/settings.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/settings.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/settings.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/settings.proto)**
 
 
 
@@ -99,25 +102,26 @@ Represents global settings for all the Gloo components.
 "consoleOptions": .gloo.solo.io.ConsoleOptions
 "graphqlOptions": .gloo.solo.io.GraphqlOptions
 "extProc": .extproc.options.gloo.solo.io.Settings
+"watchNamespaceSelectors": []gloo.solo.io.LabelSelector
 
 ```
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `discoveryNamespace` | `string` | This is the namespace to which Gloo controllers will write their own resources, e.g. discovered Upstreams or default Gateways. If empty, this will default to "gloo-system". |
-| `watchNamespaces` | `[]string` | Use this setting to restrict the namespaces that Gloo controllers take into consideration when watching for resources.In a usual production scenario, RBAC policies will limit the namespaces that Gloo has access to. If `watch_namespaces` contains namespaces outside of this whitelist, Gloo will fail to start. If not set, this defaults to all available namespaces. Please note that, the `discovery_namespace` will always be included in this list. |
+| `watchNamespaces` | `[]string` | Use this setting to restrict the namespaces that Gloo controllers take into consideration when watching for resources.In a usual production scenario, RBAC policies will limit the namespaces that Gloo has access to. If `watch_namespaces` contains namespaces outside of this whitelist, Gloo will fail to start. If not set, this defaults to all available namespaces. Please note that, the `discovery_namespace` will always be included in this list. If this is specified, it overwrites the `watch_namespace_selectors` specified. |
 | `kubernetesConfigSource` | [.gloo.solo.io.Settings.KubernetesCrds](../settings.proto.sk/#kubernetescrds) |  Only one of `kubernetesConfigSource`, `directoryConfigSource`, or `consulKvSource` can be set. |
 | `directoryConfigSource` | [.gloo.solo.io.Settings.Directory](../settings.proto.sk/#directory) |  Only one of `directoryConfigSource`, `kubernetesConfigSource`, or `consulKvSource` can be set. |
 | `consulKvSource` | [.gloo.solo.io.Settings.ConsulKv](../settings.proto.sk/#consulkv) |  Only one of `consulKvSource`, `kubernetesConfigSource`, or `directoryConfigSource` can be set. |
 | `kubernetesSecretSource` | [.gloo.solo.io.Settings.KubernetesSecrets](../settings.proto.sk/#kubernetessecrets) |  Only one of `kubernetesSecretSource`, `vaultSecretSource`, or `directorySecretSource` can be set. |
 | `vaultSecretSource` | [.gloo.solo.io.Settings.VaultSecrets](../settings.proto.sk/#vaultsecrets) |  Only one of `vaultSecretSource`, `kubernetesSecretSource`, or `directorySecretSource` can be set. |
 | `directorySecretSource` | [.gloo.solo.io.Settings.Directory](../settings.proto.sk/#directory) |  Only one of `directorySecretSource`, `kubernetesSecretSource`, or `vaultSecretSource` can be set. |
-| `secretOptions` | [.gloo.solo.io.Settings.SecretOptions](../settings.proto.sk/#secretoptions) | Settings for secrets storage. This API is experimental and not suitable for production use. |
+| `secretOptions` | [.gloo.solo.io.Settings.SecretOptions](../settings.proto.sk/#secretoptions) | Settings for secrets storage. This API is beta and should be tested thoroughly before production use. |
 | `kubernetesArtifactSource` | [.gloo.solo.io.Settings.KubernetesConfigmaps](../settings.proto.sk/#kubernetesconfigmaps) |  Only one of `kubernetesArtifactSource`, `directoryArtifactSource`, or `consulKvArtifactSource` can be set. |
 | `directoryArtifactSource` | [.gloo.solo.io.Settings.Directory](../settings.proto.sk/#directory) |  Only one of `directoryArtifactSource`, `kubernetesArtifactSource`, or `consulKvArtifactSource` can be set. |
 | `consulKvArtifactSource` | [.gloo.solo.io.Settings.ConsulKv](../settings.proto.sk/#consulkv) |  Only one of `consulKvArtifactSource`, `kubernetesArtifactSource`, or `directoryArtifactSource` can be set. |
 | `refreshRate` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | How frequently to resync watches, etc. |
-| `devMode` | `bool` | Enable serving debug data on port 9090. |
+| `devMode` | `bool` | DEPRECATED: In the past DevMode was used to expose endpoints that behave as an Admin API https://github.com/solo-io/gloo/issues/6494 We now support an Admin API on port 9091. See the following guide for more details https://docs.solo.io/gloo-edge/latest/operations/debugging_gloo/#debugging-the-control-plane. |
 | `linkerd` | `bool` | Enable automatic linkerd upstream header addition for easier routing to linkerd services. |
 | `knative` | [.gloo.solo.io.Settings.KnativeOptions](../settings.proto.sk/#knativeoptions) | Configuration options for the Clusteringress Controller (for Knative). Deprecated: Will not be available in Gloo Edge 1.11. |
 | `discovery` | [.gloo.solo.io.Settings.DiscoveryOptions](../settings.proto.sk/#discoveryoptions) | Options for configuring Gloo's Discovery service. |
@@ -138,8 +142,9 @@ Represents global settings for all the Gloo components.
 | `observabilityOptions` | [.gloo.solo.io.Settings.ObservabilityOptions](../settings.proto.sk/#observabilityoptions) | Provides settings related to the observability deployment (enterprise only). |
 | `upstreamOptions` | [.gloo.solo.io.UpstreamOptions](../settings.proto.sk/#upstreamoptions) | Default configuration to use for upstreams, when not provided by specific upstream When these properties are defined on an upstream, this configuration will be ignored. |
 | `consoleOptions` | [.gloo.solo.io.ConsoleOptions](../settings.proto.sk/#consoleoptions) | Enterprise-only: Settings for the Gloo Edge Enterprise Console (UI). |
-| `graphqlOptions` | [.gloo.solo.io.GraphqlOptions](../settings.proto.sk/#graphqloptions) | Enterprise-only: GraphQL settings. |
+| `graphqlOptions` | [.gloo.solo.io.GraphqlOptions](../settings.proto.sk/#graphqloptions) | Deprecated: The GraphQL feature will be removed in a future release. Enterprise-only: GraphQL settings. |
 | `extProc` | [.extproc.options.gloo.solo.io.Settings](../enterprise/options/extproc/extproc.proto.sk/#settings) | Enterprise-only: External Processing filter settings. These settings are used as defaults globally, and can be overridden by HttpListenerOptions, VirtualHostOptions, or RouteOptions. |
+| `watchNamespaceSelectors` | [[]gloo.solo.io.LabelSelector](../settings.proto.sk/#labelselector) | A list of Kubernetes selectors that specify the set of namespaces to restrict the namespaces that Gloo controllers take into consideration when watching for resources. Elements in the list are disjunctive (OR semantics), i.e. a namespace will be included if it matches any selector. The following example selects any namespace that matches either below: 1. The namespace has both of these labels: `env: prod` and `region: us-east1` 2. The namespace has label `app` equal to `cassandra` or `spark`. ```yaml watchNamespaceSelectors: - matchLabels: env: prod region: us-east1 - matchExpressions: - key: app operator: In values: - cassandra - spark ``` However, if the match conditions are part of the same same list item, the namespace must match all conditions. ```yaml watchNamespaceSelectors: - matchLabels: env: prod region: us-east1 matchExpressions: - key: app operator: In values: - cassandra - spark ``` Refer to the [Kubernetes selector docs](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors) for additional detail on selector semantics. |
 
 
 
@@ -271,6 +276,7 @@ For more info see https://developer.hashicorp.com/vault/docs/auth/aws
 "accessKeyId": string
 "secretAccessKey": string
 "sessionToken": string
+"leaseIncrement": int
 
 ```
 
@@ -280,9 +286,10 @@ For more info see https://developer.hashicorp.com/vault/docs/auth/aws
 | `region` | `string` | The AWS region to use for the login attempt. |
 | `iamServerIdHeader` | `string` | The IAM Server ID Header required to be included in the request. |
 | `mountPath` | `string` | The Vault path on which the AWS auth is mounted. |
-| `accessKeyId` | `string` | The Access Key ID as provided by the security credentials on the AWS IAM resource. |
-| `secretAccessKey` | `string` | The Secret Access Key as provided by the security credentials on the AWS IAM resource. |
+| `accessKeyId` | `string` | The Access Key ID as provided by the security credentials on the AWS IAM resource. Optional: In cases such as receiving temporary credentials through assumed roles with AWS Security Token Service (STS) or IAM Roles for Service Accounts (IRSA), this field can be omitted. https://developer.hashicorp.com/vault/docs/auth/aws#iam-authentication-inferences. |
+| `secretAccessKey` | `string` | The Secret Access Key as provided by the security credentials on the AWS IAM resource. Optional: In cases such as receiving temporary credentials through assumed roles with AWS Security Token Service (STS) or IAM Roles for Service Accounts (IRSA), this field can be omitted. https://developer.hashicorp.com/vault/docs/auth/aws#iam-authentication-inferences. |
 | `sessionToken` | `string` | The Session Token as provided by the security credentials on the AWS IAM resource. |
+| `leaseIncrement` | `int` | The time increment, in seconds, used in renewing the lease of the Vault token. See: https://developer.hashicorp.com/vault/docs/concepts/lease#lease-durations-and-renewal. Defaults to 0, which causes the default TTL to be used. |
 
 
 
@@ -443,7 +450,7 @@ This option determines the root of the directory tree used to this end.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
-| `graphqlEnabled` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Enable function discovery service on GraphQL gRPC and OpenApi upstreams. Defaults to true. |
+| `graphqlEnabled` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Deprecated: The GraphQL feature will be removed in a future release. Enable function discovery service on GraphQL gRPC and OpenApi upstreams. Defaults to true. |
 
 
 
@@ -630,12 +637,16 @@ Provides settings related to the observability pod's interactions with grafana
 
 ```yaml
 "defaultDashboardFolderId": .google.protobuf.UInt32Value
+"dashboardPrefix": string
+"extraMetricQueryParameters": string
 
 ```
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `defaultDashboardFolderId` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | (UInt32Value) Grafana allows dashboards to be added to specific folders by specifying that folder's ID If unset, automatic upstream dashboards are generated in the general folder (folderId: 0). If set, the observability deployment will try to create/move all upstreams without their own folderId to the folder specified here, after verifying that a folder with such an ID exists. Be aware that grafana requires a folders ID, which should not be confused with the similarly-named and more easily accessible folder UID value. If individual upstream dashboards need to be placed specific granafa folders, they can be given their own folder IDs by annotating the upstreams. The annotation key must be 'observability.solo.io/dashboard_folder_id' and the value must be the folder ID. Folder IDs can be retrieved from grafana with a pair of terminal commands: 1. Port forward the grafana deployment to surface its API: kubectl -n gloo-system port-forward deployment/glooe-grafana 3000 2. Request all folder data (after admin:admin is replaced with the correct credentials): curl http://admin:admin@localhost:3000/api/folders. |
+| `dashboardPrefix` | `string` | The prefix of the UIDs and Titles for all dashboards created on grafana. This is restricted to 20 characters. |
+| `extraMetricQueryParameters` | `string` | Extra parameters when querying metrics from Grafana dashboards. This string will be appended to every query for metrics in the definition of all gloo managed dashboards. It can consist of multiple query parameters separated by a comma. For example `cluster="some-cluster",gateway_proxy_id="proxy-2"`. |
 
 
 
@@ -653,6 +664,54 @@ Provides settings related to the observability pod's interactions with grafana
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `labelToPath` | `map<string, string>` | Each (key, value) pair in the map defines a label to be applied. Keys specify the name of the label (e.g. "namespace"). Values specify the jsonpath (https://kubernetes.io/docs/reference/kubectl/jsonpath/) string corresponding to the field of a resource to use as the label value (e.g. "{.metadata.namespace}"). For example, if labelToPath = {name: '{.metadata.name}', namespace: '{.metadata.namespace}'} for Upstream.v1.gateway.solo.io, the following metric would be produced: validation_gateway_solo_io_upstream_config_status{name="default-petstore-8080",namespace="gloo-system"} 0. |
+
+
+
+
+---
+### LabelSelector
+
+ 
+A label selector requirement is a selector that contains values, a key, and an operator that
+relates the key and values.
+Copied from Kubernetes to avoid expensive dependency on Kubernetes libraries.
+Ref: https://github.com/kubernetes/apimachinery/blob/f7615f37d717297aca51101478406af712553c5b/pkg/apis/meta/v1/generated.proto#L442-L453
+
+```yaml
+"matchLabels": map<string, string>
+"matchExpressions": []gloo.solo.io.LabelSelectorRequirement
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `matchLabels` | `map<string, string>` | matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed. +optional. |
+| `matchExpressions` | [[]gloo.solo.io.LabelSelectorRequirement](../settings.proto.sk/#labelselectorrequirement) | matchExpressions is a list of label selector requirements. The requirements are ANDed. +optional. |
+
+
+
+
+---
+### LabelSelectorRequirement
+
+ 
+A label selector requirement is a selector that contains values, a key, and an operator that
+relates the key and values.
+Copied from Kubernetes to avoid expensive dependency on Kubernetes libraries.
+Ref: https://github.com/kubernetes/apimachinery/blob/f7615f37d717297aca51101478406af712553c5b/pkg/apis/meta/v1/generated.proto#L455-L472
+
+```yaml
+"key": string
+"operator": string
+"values": []string
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `key` | `string` | key is the label key that the selector applies to. +patchMergeKey=key +patchStrategy=merge. |
+| `operator` | `string` | operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist. |
+| `values` | `[]string` | values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch. +optional. |
 
 
 
@@ -702,6 +761,7 @@ Settings specific to the gloo (Envoy xDS server) controller
 "proxyDebugBindAddr": string
 "logTransformationRequestResponseInfo": .google.protobuf.BoolValue
 "transformationEscapeCharacters": .google.protobuf.BoolValue
+"istioOptions": .gloo.solo.io.GlooOptions.IstioOptions
 
 ```
 
@@ -713,17 +773,18 @@ Settings specific to the gloo (Envoy xDS server) controller
 | `endpointsWarmingTimeout` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | Timeout to get initial snapshot of resources. If set to zero, Gloo will not wait for initial snapshot - if nonzero and gloo could not fetch it's initial snapshot before the timeout reached, gloo will panic. If unset, Gloo defaults to 5 minutes. |
 | `awsOptions` | [.gloo.solo.io.GlooOptions.AWSOptions](../settings.proto.sk/#awsoptions) |  |
 | `invalidConfigPolicy` | [.gloo.solo.io.GlooOptions.InvalidConfigPolicy](../settings.proto.sk/#invalidconfigpolicy) | set these options to fine-tune the way Gloo handles invalid user configuration. |
-| `disableKubernetesDestinations` | `bool` | Gloo allows you to directly reference a Kubernetes service as a routing destination. To enable this feature, Gloo scans the cluster for Kubernetes services and creates a special type of in-memory Upstream to represent them. If the cluster contains a lot of services and you do not restrict the namespaces Gloo is watching, this can result in significant overhead. If you do not plan on using this feature, you can use this flag to turn it off. |
+| `disableKubernetesDestinations` | `bool` | Enable or disable Gloo Edge to scan Kubernetes services in the cluster and create in-memory Upstream resources to represent them. These resources enable Gloo Edge to route requests to a Kubernetes service. Note that if you have a large number of services in your cluster and you do not restrict the namespaces that Gloo Edge watches, the API snapshot increases which can have a negative impact on the Gloo Edge translation time. In addition, load balancing is done in `kube-proxy` which can have further performance impacts. Using Gloo Upstreams as a routing destination bypasses `kube-proxy` as the request is routed to the pod directly. Alternatively, you can use [`Kubernetes`](https://docs.solo.io/gloo-edge/latest/reference/api/github.com/solo-io/gloo/projects/gloo/api/v1/options/kubernetes/kubernetes.proto.sk/) Upstream resources as a routing destination to forward requests to the pod directly. For more information, see the [docs](https://docs.solo.io/gloo-edge/latest/guides/traffic_management/destination_types/kubernetes_services/). |
 | `disableGrpcWeb` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Default policy for grpc-web. set to true if you do not wish grpc-web to be automatically enabled. set to false if you wish grpc-web enabled unless disabled on the listener level. If not specified, defaults to `false`. |
 | `disableProxyGarbageCollection` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Set this option to determine the state of the envoy configuration when a virtual service is deleted, resulting in a proxy with no configured routes. set to true if you wish to keep envoy serving the routes from the latest valid configuration. set to false if you wish to reset the envoy configuration to a clean slate with no routes. If not specified, defaults to `false`. |
 | `regexMaxProgramSize` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | Set this option to specify the default max program size for regexes. If not specified, defaults to 100. |
 | `restXdsBindAddr` | `string` | Where the `gloo` REST xDS server should bind. Defaults to `0.0.0.0:9976`. |
-| `enableRestEds` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Whether or not to use rest xds for all EDS by default. Rest XDS, as opposed to grpc, uses http polling rather than streaming. |
+| `enableRestEds` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Whether or not to use rest xds for all EDS by default. Rest XDS, as opposed to grpc, uses http polling rather than streaming It is strongly recommended that this field be set to false, due to the superior performance of GRPC XDS. |
 | `failoverUpstreamDnsPollingInterval` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | The polling interval for the DNS server if upstream failover is configured. If there is a failover upstream address with a hostname instead of an IP, Gloo will resolve the hostname with the configured frequency to update endpoints with any changes to DNS resolution. Defaults to 10s. |
 | `removeUnusedFilters` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | By default gloo adds a series of filters to envoy to ensure that new routes are picked up Even if the listener previously did not have a filter on the chain previously. When set to true unused filters are not added to the chain by default. Defaults to false. |
 | `proxyDebugBindAddr` | `string` | Where the `gloo` proxy debug server should bind. Defaults to `gloo:9966`. |
 | `logTransformationRequestResponseInfo` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | When enabled, log the request/response body and headers before and after any transformations are applied. May be useful in the case where many transformations are applied and it is difficult to determine which are causing issues. Defaults to false. |
 | `transformationEscapeCharacters` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Set escapeCharacters for all TransformationTemplates on all vhosts and routes. This setting can be overridden in individual TransformationTemplates. |
+| `istioOptions` | [.gloo.solo.io.GlooOptions.IstioOptions](../settings.proto.sk/#istiooptions) |  |
 
 
 
@@ -745,7 +806,7 @@ Settings specific to the gloo (Envoy xDS server) controller
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `enableCredentialsDiscovey` | `bool` | Enable credential discovery via IAM; when this is set, there's no need provide a secret on the upstream when running on AWS environment. Note: This should **ONLY** be enabled when running in an AWS environment, as the AWS code blocks the envoy main thread. This should be negligible when running inside AWS. Only one of `enableCredentialsDiscovey` or `serviceAccountCredentials` can be set. |
-| `serviceAccountCredentials` | [.envoy.config.filter.http.aws_lambda.v2.AWSLambdaConfig.ServiceAccountCredentials](../../external/envoy/extensions/aws/filter.proto.sk/#serviceaccountcredentials) | Use projected service account token, and role arn to create temporary credentials with which to authenticate lambda requests. This functionality is meant to work along side EKS service account to IAM binding functionality as outlined here: https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html If the following environment values are not present in the gateway-proxy, this option cannot be used. 1. AWS_WEB_IDENTITY_TOKEN_FILE 2. AWS_ROLE_ARN The role which will be assumed by the credentials will be the one specified by AWS_ROLE_ARN, however, this can also be overwritten in the AWS Upstream spec via the role_arn field If they are not specified envoy will NACK the config update, which will show up in the logs when running OS Gloo. When running Gloo enterprise it will be reflected in the prometheus stat: "glooe.solo.io/xds/nack" In order to specify the aws sts endpoint, both the cluster and uri must be set. This is due to an envoy limitation which cannot infer the host or path from the cluster, and therefore must be explicitly specified via the uri. Only one of `serviceAccountCredentials` or `enableCredentialsDiscovey` can be set. |
+| `serviceAccountCredentials` | .envoy.config.filter.http.aws_lambda.v2.AWSLambdaConfig.ServiceAccountCredentials | Use projected service account token, and role arn to create temporary credentials with which to authenticate lambda requests. This functionality is meant to work along side EKS service account to IAM binding functionality as outlined here: https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html If the following environment values are not present in the gateway-proxy, this option cannot be used. 1. AWS_WEB_IDENTITY_TOKEN_FILE 2. AWS_ROLE_ARN The role which will be assumed by the credentials will be the one specified by AWS_ROLE_ARN, however, this can also be overwritten in the AWS Upstream spec via the role_arn field If they are not specified envoy will NACK the config update, which will show up in the logs when running OS Gloo. When running Gloo enterprise it will be reflected in the prometheus stat: "glooe.solo.io/xds/nack" In order to specify the aws sts endpoint, both the cluster and uri must be set. This is due to an envoy limitation which cannot infer the host or path from the cluster, and therefore must be explicitly specified via the uri. Only one of `serviceAccountCredentials` or `enableCredentialsDiscovey` can be set. |
 | `propagateOriginalRouting` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Send downstream path and method as `x-envoy-original-path` and `x-envoy-original-method` headers on the request to AWS lambda. Defaults to false. |
 | `credentialRefreshDelay` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | Sets cadence for refreshing credentials for Service Account. Does nothing if Service account is not set. Does not affect the default filewatch for service account only augments it. Defaults to not refreshing on time period. Suggested is 15 minutes. |
 | `fallbackToFirstFunction` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Sets the unsafe behavior where a route can specify a lambda upstream but not set the function to target. It will use the first function which if discovery is enabled the first function is the first function name alphabetically from the last discovery run. This means that the lambda being pointed to could change. Defaults to false. |
@@ -771,7 +832,28 @@ Policy for how Gloo should handle invalid config
 | ----- | ---- | ----------- | 
 | `replaceInvalidRoutes` | `bool` | if set to `true`, Gloo removes any routes from the provided configuration which point to a missing destination. Routes that are removed in this way will instead return a configurable direct response to clients. When routes are replaced, Gloo will configure Envoy with a special listener which serves direct responses. Note: enabling this option allows Gloo to accept partially valid proxy configurations. |
 | `invalidRouteResponseCode` | `int` | replaced routes reply to clients with this response code. default is 404. |
-| `invalidRouteResponseBody` | `string` | replaced routes reply to clients with this response body. default is 'Gloo Gateway has invalid configuration. Administrators should run `glooctl check` to find and fix config errors.'. |
+| `invalidRouteResponseBody` | `string` | replaced routes reply to clients with this response body. default is 'Gloo Edge has invalid configuration. Administrators should run `glooctl check` to find and fix config errors.'. |
+
+
+
+
+---
+### IstioOptions
+
+
+
+```yaml
+"appendXForwardedHost": .google.protobuf.BoolValue
+"enableAutoMtls": .google.protobuf.BoolValue
+"enableIntegration": .google.protobuf.BoolValue
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `appendXForwardedHost` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Set to false to disable adding X-Forwarded-Host header in Istio integration Defaults to true Warning: This value is deprecated and will be removed in a future release. Also, you cannot use this value with a Kubernetes Gateway API proxy. |
+| `enableAutoMtls` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Set to true to enable automatic mTLS for all upstreams. Istio integration must be enabled for this to take effect. Defaults to false. |
+| `enableIntegration` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Istio integration is enabled via global.istioIntegration.enabled on the helm chart. If enabled, an istio-proxy container and sds container are assumed to exist alongside the gateway proxy. These containers are created by enabling the istioIntegration.enabled option in the helm chart. Defaults to false. |
 
 
 
@@ -811,6 +893,7 @@ Settings specific to the Gateway controller
 "persistProxySpec": .google.protobuf.BoolValue
 "enableGatewayController": .google.protobuf.BoolValue
 "isolateVirtualHostsBySslConfig": .google.protobuf.BoolValue
+"translateEmptyGateways": .google.protobuf.BoolValue
 
 ```
 
@@ -825,6 +908,7 @@ Settings specific to the Gateway controller
 | `persistProxySpec` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Set this to persist the Proxy CRD to etcd By default, proxies are kept in memory to improve performance. Proxies can be persisted to etcd to allow external tools and other pods to read the contents the Proxy CRD. |
 | `enableGatewayController` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | This is set based on the install mode. It indicates to gloo whether or not it should run the gateway translations and validation. |
 | `isolateVirtualHostsBySslConfig` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | If set, group virtual hosts by matching ssl config, and isolate them on separate filter chains The default behavior is to aggregate all virtual hosts, and expose them on identical filter chains, each with a FilterChainMatch that corresponds to the ssl config. Individual Gateways can override this behavior by configuring the "gateway.solo.io/isolate_vhost" annotation to be a truthy ("true", "false") value. |
+| `translateEmptyGateways` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | If set, gateways will be translated into Envoy listeners even if no VirtualServices exist or match a gateway. When there are no VirtualServices that implies there are no routes to serve, so all requests will return a 404. Defaults to false. The default behavior when no VirtualServices are defined or no Gateways match a VirtualService is that the gateway is not converted into an Envoy listener. |
 
 
 
@@ -846,6 +930,8 @@ options for configuring admission control / validation
 "disableTransformationValidation": .google.protobuf.BoolValue
 "validationServerGrpcMaxSizeBytes": .google.protobuf.Int32Value
 "serverEnabled": .google.protobuf.BoolValue
+"warnMissingTlsSecret": .google.protobuf.BoolValue
+"fullEnvoyValidation": .google.protobuf.BoolValue
 
 ```
 
@@ -856,11 +942,13 @@ options for configuring admission control / validation
 | `validationWebhookTlsKey` | `string` | Path to TLS Private Key for Kubernetes Validating webhook. Defaults to `/etc/gateway/validation-certs/tls.key`. |
 | `ignoreGlooValidationFailure` | `bool` | Deprecated: the Gateway and the Gloo pods are now merged together, there are no longer requests made to a Gloo Validation server. When Gateway cannot communicate with Gloo (e.g. Gloo is offline) resources will be rejected by default. Enable the `ignoreGlooValidationFailure` to prevent the Validation server from rejecting resources due to network errors. |
 | `alwaysAccept` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Always accept resources even if validation produced an error. Validation will still log the error and increment the validation.gateway.solo.io/resources_rejected stat. Currently defaults to true - must be set to `false` to prevent writing invalid resources to storage. |
-| `allowWarnings` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Accept resources if validation produced a warning (defaults to true). By setting to false, this means that validation will start rejecting resources that would result in warnings, rather than just those that would result in errors. |
+| `allowWarnings` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Accept resources if validation produced a warning (defaults to true). By setting to false, this means that validation will start rejecting resources that would result in warnings, rather than just those that would result in errors. Note that this setting has no impact on Kubernetes Gateway API validation, as warnings will always be allowed in that context. |
 | `warnRouteShortCircuiting` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Deprecated: See `server_enabled` and consider configuring it to `false` instead. Write a warning to route resources if validation produced a route ordering warning (defaults to false). By setting to true, this means that Gloo will start assigning warnings to resources that would result in route short-circuiting within a virtual host, for example: - prefix routes that make later routes unreachable - regex routes that make later routes unreachable - duplicate matchers. |
-| `disableTransformationValidation` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Deprecated: See `server_enabled` and consider configuring it to `false` instead. By default gloo will attempt to validate transformations by calling out to a local envoy binary in `validate` mode. Calling this local envoy binary can become slow when done many times during a single validation. Setting this to true will stop gloo from calling out to envoy to validate the transformations, which may speed up the validation time considerably, but may also cause the transformation config to fail after being sent to envoy. When disabling this, ensure that your transformations are valid prior to applying them. |
+| `disableTransformationValidation` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | By default gloo will attempt to validate transformations by calling out to a local envoy binary in `validate` mode. Calling this local envoy binary can become slow when done many times during a single validation. Setting this to true will stop gloo from calling out to envoy to validate the transformations, which may speed up the validation time considerably, but may also cause the transformation config to fail after being sent to envoy. When disabling this, ensure that your transformations are valid prior to applying them. |
 | `validationServerGrpcMaxSizeBytes` | [.google.protobuf.Int32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/int-32-value) | By default, gRPC validation messages between gateway and gloo pods have a max message size of 100 MB. Setting this value sets the gRPC max message size in bytes for the gloo validation server. This should only be changed if necessary. If not included, the gRPC max message size will be the default of 100 MB. |
 | `serverEnabled` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | By providing the validation field (parent of this object) the user is implicitly opting into validation. This field allows the user to opt out of the validation server, while still configuring pre-existing fields such as `warn_route_short_circuiting` and `disable_transformation_validation`. If not included, the validation server will be enabled. |
+| `warnMissingTlsSecret` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Allows configuring validation to report a missing TLS secret referenced by a SslConfig or UpstreamSslConfig as a warning instead of an error. This will allow for eventually consistent workloads, but will also permit the accidental deletion of secrets being referenced, which would cause disruption in traffic. |
+| `fullEnvoyValidation` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Configures the Gloo translation loop to send the final product of translation through Envoy validation mode. This has an negative impact on the total translation throughput, but it helps ensure the configuration will not be nacked when served to Envoy. This feature is disabled by default and is not recommended for production deployments unless the performance implications are well understood and acceptable. Large configurations can take more than 10 seconds to validate, causing the validating webhook to timeout. When enabling this feature, consider increasing the timeout for the validating webhook (`.Values.gateway.validation.webhook.timeoutSeconds`). |
 
 
 
@@ -869,6 +957,7 @@ options for configuring admission control / validation
 ### ConsoleOptions
 
  
+Deprecated: The GraphQL feature will be removed in a future release.
 Settings used by the Enterprise Console (UI)
 
 ```yaml
@@ -889,6 +978,7 @@ Settings used by the Enterprise Console (UI)
 ### GraphqlOptions
 
  
+Deprecated: The GraphQL feature will be removed in a future release.
 GraphQL settings used by the control plane and UI.
 
 ```yaml

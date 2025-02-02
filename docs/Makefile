@@ -8,40 +8,33 @@ VERSION 	?= 1.0.1-dev    # a basic version that can be overidden
 
 HUGO_VERSION := 0.81.0
 
-SOLO_HUGO_THEME_REVISION := v0.0.25
+SOLO_HUGO_THEME_REVISION := v0.0.29
 
 # The minimum version to maintain in our public docs
-MIN_SCANNED_VERSION ?= v1.11.0
+MIN_SCANNED_VERSION ?= v1.15.0
 
 #----------------------------------------------------------------------------------
 # Docs
 #----------------------------------------------------------------------------------
 
-
 .PHONY: site-common
-site-common: clean gloo-enterprise-version
+site-common: clean
 	if [ ! -d themes/hugo-theme-soloio ]; then git clone https://github.com/solo-io/hugo-theme-soloio themes/hugo-theme-soloio; fi
 	git -C themes/hugo-theme-soloio checkout $(SOLO_HUGO_THEME_REVISION)
-	GO111MODULE=on go run cmd/generate_docs.go gen-releases -r gloo > opensource.out
-	GO111MODULE=on go run cmd/generate_docs.go gen-releases -r glooe > enterprise.out
-	GO111MODULE=on go run cmd/generate_docs.go gen-changelog-md -r gloo > content/static/content/gloo-changelog.docgen
-	GO111MODULE=on go run cmd/generate_docs.go gen-changelog-md -r glooe > content/static/content/glooe-changelog.docgen
+	go run cmd/generate_docs.go gen-releases -r gloo > opensource.out
+	go run cmd/generate_docs.go gen-releases -r glooe > enterprise.out
+	go run cmd/generate_docs.go gen-changelog-md -r gloo > content/static/content/gloo-changelog.docgen
+	go run cmd/generate_docs.go gen-changelog-md -r glooe > content/static/content/glooe-changelog.docgen
 
 	# generate split security scans for gloo versions which HAVE received new split-templating updates
-	MIN_SCANNED_VERSION=$(MIN_SCANNED_VERSION) GO111MODULE=on go run cmd/generate_docs.go gen-security-scan-md -r gloo > content/static/content/gloo-security-scan.docgen
-	MIN_SCANNED_VERSION=$(MIN_SCANNED_VERSION) GO111MODULE=on go run cmd/generate_docs.go gen-security-scan-md -r glooe > content/static/content/glooe-security-scan.docgen
+	MIN_SCANNED_VERSION=$(MIN_SCANNED_VERSION) go run cmd/generate_docs.go gen-security-scan-md -r gloo > content/static/content/gloo-security-scan.docgen
+	MIN_SCANNED_VERSION=$(MIN_SCANNED_VERSION) go run cmd/generate_docs.go gen-security-scan-md -r glooe > content/static/content/glooe-security-scan.docgen
 	cat content/static/content/gloo-security-scan.docgen
 	./split-file-by-delimiter.sh content/static/content/gloo-security-scan.docgen \\\*\\\*\\\*
 	./split-file-by-delimiter.sh content/static/content/glooe-security-scan.docgen \\\*\\\*\\\*
 
-	# get enterprise helm values based on contents of _output/gloo-enterprise-version
-	GO111MODULE=on go run cmd/generate_docs.go get-enterprise-helm-values > content/static/content/glooe-values.docgen
-	rm -f opensource.out enterprise.out
-
-
 .PHONY: site-test
 site-test: site-common
-	# ensure hugo version locally installed matches the version in cloudbuild CI
 	hugo version | grep -q $(HUGO_VERSION)
 	hugo --config docs.toml
 	# ensure that valid json is generated. Common cause: using yaml ">" multiline string symbols in Hugo's toml headers
@@ -49,7 +42,6 @@ site-test: site-common
 
 .PHONY: site-release
 site-release: site-common
-	# ensure hugo version locally installed matches the version in cloudbuild CI
 	hugo version | grep -q $(HUGO_VERSION)
 	hugo --config docs.toml
 	# ensure that valid json is generated. Common cause: using yaml ">" multiline string symbols in Hugo's toml headers
@@ -60,7 +52,6 @@ site-release: site-common
 
 .PHONY: serve-site
 serve-site: site-test
-	# ensure hugo version locally installed matches the version in cloudbuild CI
 	hugo version | grep -q $(HUGO_VERSION)
 	hugo --config docs.toml --themesDir themes server -D
 
@@ -85,12 +76,6 @@ install-tools:
 .PHONY: build-site
 build-site: clean
 	./build-docs.sh
-
-# Generate _output/gloo-enterprise-version based on the latest patch enterprise version
-# corresponding to content in changelog directory.
-.PHONY: gloo-enterprise-version
-gloo-enterprise-version:
-	cd .. && GO111MODULE=on go run hack/find_latest_enterprise_version/main.go
 
 #----------------------------------------------------------------------------------
 # Printing makefile variables utility

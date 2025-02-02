@@ -1,3 +1,5 @@
+//go:build ignore
+
 package e2e_test
 
 import (
@@ -6,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/solo-io/gloo/test/services/envoy"
+	"github.com/kgateway-dev/kgateway/test/services/envoy"
 
 	"github.com/rotisserie/eris"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -14,19 +16,6 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gatewaydefaults "github.com/solo-io/gloo/projects/gateway/pkg/defaults"
-	"github.com/solo-io/gloo/projects/gateway/pkg/utils/metrics"
-	v3 "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/config/core/v3"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/core/matchers"
-	extauthv1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/enterprise/options/extauth/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/ssl"
-	"github.com/solo-io/gloo/projects/gloo/pkg/defaults"
-	"github.com/solo-io/gloo/projects/gloo/pkg/translator"
-	gloohelpers "github.com/solo-io/gloo/test/helpers"
-	"github.com/solo-io/gloo/test/services"
-	"github.com/solo-io/gloo/test/v1helpers"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/common/kubernetes"
@@ -34,6 +23,20 @@ import (
 	"github.com/solo-io/solo-kit/pkg/errors"
 	"github.com/solo-io/solo-kit/pkg/utils/kubeutils"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/kgateway-dev/kgateway/pkg/utils/statsutils/metrics"
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gatewaydefaults "github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
+	v3 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/external/envoy/config/core/v3"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/core/matchers"
+	extauthv1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/enterprise/options/extauth/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/ssl"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/defaults"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/translator"
+	gloohelpers "github.com/kgateway-dev/kgateway/test/helpers"
+	"github.com/kgateway-dev/kgateway/test/services"
+	"github.com/kgateway-dev/kgateway/test/v1helpers"
 )
 
 const (
@@ -409,7 +412,7 @@ var _ = Describe("Gateway", func() {
 					}, "10s", "0.1s").Should(BeTrue())
 
 					// Create a regular request
-					request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d", envoyInstance.HttpPort), nil)
+					request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d", envoyInstance.HttpPort), nil)
 					Expect(err).NotTo(HaveOccurred())
 					request = request.WithContext(ctx)
 
@@ -431,7 +434,7 @@ var _ = Describe("Gateway", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					// Create a regular request
-					request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/", envoyInstance.HttpPort), nil)
+					request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/", envoyInstance.HttpPort), nil)
 					Expect(err).NotTo(HaveOccurred())
 					request = request.WithContext(ctx)
 
@@ -476,7 +479,7 @@ var _ = Describe("Gateway", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					// Create a regular request
-					request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/", envoyInstance.HttpPort), nil)
+					request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/", envoyInstance.HttpPort), nil)
 					Expect(err).NotTo(HaveOccurred())
 					request = request.WithContext(context.TODO())
 					request.Header.Add("cluster-header-name", upstreamName)
@@ -970,10 +973,10 @@ var _ = Describe("Gateway", func() {
 
 					Eventually(func() (gatewayv1.VirtualServiceList, error) {
 						return testClients.VirtualServiceClient.List(writeNamespace, clients.ListOpts{Ctx: ctx})
-					}, "10s", "0.5s").Should(HaveLen(0))
+					}, "10s", "0.5s").Should(BeEmpty())
 					Consistently(func() (gatewayv1.VirtualServiceList, error) {
 						return testClients.VirtualServiceClient.List(writeNamespace, clients.ListOpts{Ctx: ctx})
-					}, "10s", "0.5s").Should(HaveLen(0))
+					}, "10s", "0.5s").Should(BeEmpty())
 				})
 
 				It("should work with no ssl and clean up the envoy config when the virtual service is deleted", func() {
@@ -994,7 +997,7 @@ var _ = Describe("Gateway", func() {
 					}, "10s", "0.1s").Should(BeTrue())
 
 					// Create a regular request
-					request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d", envoyInstance.HybridPort), nil)
+					request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d", envoyInstance.HybridPort), nil)
 					Expect(err).NotTo(HaveOccurred())
 					request = request.WithContext(ctx)
 
@@ -1011,7 +1014,7 @@ var _ = Describe("Gateway", func() {
 
 				It("should not match requests that contain a header that is excluded from match", func() {
 					// Create a regular request
-					request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/", envoyInstance.HybridPort), nil)
+					request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/", envoyInstance.HybridPort), nil)
 					Expect(err).NotTo(HaveOccurred())
 					request = request.WithContext(ctx)
 
@@ -1062,7 +1065,7 @@ var _ = Describe("Gateway", func() {
 					}, "5s", "0.3s").ShouldNot(HaveOccurred())
 
 					// Create a regular request
-					request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/", envoyInstance.HybridPort), nil)
+					request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/", envoyInstance.HybridPort), nil)
 					Expect(err).NotTo(HaveOccurred())
 					request = request.WithContext(context.TODO())
 					request.Header.Add("cluster-header-name", upstreamName)

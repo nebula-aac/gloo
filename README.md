@@ -1,58 +1,54 @@
-
-
 <h1 align="center">
-    <img src="https://docs.solo.io/gloo-edge/main/img/Gloo-01.png" alt="Gloo Edge" width="200" height="155">
-  <br>
-  An Envoy-Powered API Gateway
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/content/img/kgateway/logo-dark.svg" alt="kgateway" width="400">
+    <source media="(prefers-color-scheme: light)" srcset="docs/content/img/kgateway/logo.svg" alt="kgateway" width="400">
+    <img alt="kgateway" src="docs/content/img/kgateway/logo.svg">
+  </picture>
+  <br/>
+  An Envoy-Powered, Kubernetes-Native API Gateway
 </h1>
 
-Gloo Edge is a feature-rich, Kubernetes-native ingress controller and next-generation API gateway. Gloo Edge is exceptional in its function-level routing; its support for legacy apps, microservices and serverless; its discovery capabilities; its numerous features; and its tight integration with leading open-source projects. Gloo Edge is uniquely designed to support hybrid applications in which multiple technologies, architectures, protocols, and clouds can coexist. 
+## About kgateway
+Kgateway is a feature-rich, fast, and flexible Kubernetes-native ingress controller and next-generation API gateway that is built on top of [Envoy proxy](https://www.envoyproxy.io) and the Kubernetes Gateway API. It excels in function-level routing, supports legacy apps, microservices and serverless, offers robust discovery capabilities, integrates seamlessly with open-source projects, and is designed to support hybrid applications with various technologies, architectures, protocols, and clouds.
+
+Please see [the plan](https://github.com/kgateway-dev/kgateway/issues/10363) for more information and current status.
+
+[**Installation**](https://kgateway.dev/docs/quickstart/) &nbsp; |
+&nbsp; [**Documentation**](https://kgateway.dev/docs) &nbsp; |
+&nbsp; [**Blog**](https://kgateway.dev/blog/) &nbsp; |
+&nbsp; [**Slack invite**](https://slack.cncf.io/) &nbsp; |
+&nbsp; [**Slack channel**](https://cloud-native.slack.com/archives/C080D3PJMS4)
+
+<BR><center><img align="center" src="docs/content/img/kgateway/component-architecture.svg" alt="kgateway Architecture" width="700"></center>
+
+### Using kgateway
+- **Kubernetes Gateway API**: Kgateway is a feature-rich ingress controller, built on top of the Envoy Proxy and fully conformant with the Kubernetes Gateway API.
+- **Next-generation API gateway**: Kgateway provides a long list of API gateway features including rate limiting, circuit breaking, retries, caching, transformation, service-mesh integration, security, external authentication and authorization.
+- **Hybrid apps**: Kgateway creates applications that route to backends implemented as microservices, serverless functions and legacy apps. This feature can help users to
+  * Gradually migrate from their legacy code to microservices and serverless.
+  * Add new functionalities using cloud-native technologies while maintaining their legacy codebase.
+  * Allow different teams in an organization choose different architectures.
+
+<!---
+PLEASE DO NOT RENAME THIS SECTION
+This header is used as an anchor in our CNCF Donation Issue
+-->
+### What makes kgateway unique
+- **Function-level routing allows integration of legacy applications, microservices and serverless**: Kgateway can route requests directly to functions. Request to Function can be a serverless function call (e.g. Lambda, Google Cloud Function, OpenFaaS Function, etc.), an API call on a microservice or a legacy service (e.g. a REST API call, OpenAPI operation, XML/SOAP request etc.), or publishing to a message queue (e.g. NATS, AMQP, etc.). This unique ability is what makes kgateway the only API gateway that supports hybrid apps as well as the only one that does not tie the user to a specific paradigm.
+- **Kgateway incorporates vetted open-source projects to provide broad functionality**: Kgateway supports high-quality features by integrating with top open-source projects, including gRPC, OpenTracing, NATS and more. Kgateway's architecture allows rapid integration of future popular open-source projects as they emerge.
+- **Full automated discovery lets users move fast**: Upon launch, kgateway creates a catalog of all available destinations and continuously keeps them up to date. This takes the responsibility for 'bookkeeping' away from the developers and guarantees that new features become available as soon as they are ready. Kgateway discovers across IaaS, PaaS and FaaS providers as well as Swagger, and gRPC.
 
 
-[**Installation**](https://gloo.solo.io/installation/) &nbsp; |
-&nbsp; [**Documentation**](https://gloo.solo.io) &nbsp; |
-&nbsp; [**Blog**](https://www.solo.io/blog/?category=gloo) &nbsp; |
-&nbsp; [**Slack**](https://slack.solo.io) &nbsp; |
-&nbsp; [**Twitter**](https://twitter.com/soloio_inc) |
-&nbsp; [**Enterprise Trial**](https://www.solo.io/products/gloo/#enterprise-trial)
+## Next steps
+- Join us on our Slack channel: [#kgateway](https://cloud-native.slack.com/archives/C080D3PJMS4) ([get an invite here]((https://slack.cncf.io/)))
+- Check out the docs: [https://kgateway.dev/docs](https://kgateway.dev/docs)
+- Learn more about the [community](https://github.com/kgateway-dev/community)
 
-<BR><center><img src="https://docs.solo.io/gloo-edge/main/img/gloo-architecture-envoys.png" alt="Gloo Edge Architecture" width="906"></center>
+## Contributing to kgateway
+The [devel](devel) folder should be the starting point for understanding the code, and contributing to the product.
 
-## Summary
+## Thanks
+Kgateway would not be possible without the valuable open-source work of projects in the community. We would like to extend a special thank-you to [Envoy](https://www.envoyproxy.io).
 
-- [**Using Gloo Edge**](#using-gloo-edge)
-- [**What makes Gloo Edge unique**](#what-makes-gloo-edge-unique)
-
-
-## Using Gloo Edge
-- **Kubernetes ingress controller** : Gloo Edge can function as a feature-rich ingress controller, built on top of the Envoy Proxy. 
-- **Next-generation API gateway** : Gloo Edge provides a long list of API gateway features including rate limiting, circuit breaking, retries, caching, transformation, service-mesh integration, security, external authentication and authorization. 
-- **Hybrid apps** : Gloo Edge creates applications that route to backends implemented as microservices, serverless functions and legacy apps. This feature can help users to -
-   - A) Gradually migrate from their legacy code to microservices and serverless.
-   - B) Add new functionalities using cloud-native technologies while maintaining their legacy codebase.
-   - C) Allow different teams in an organization choose different architectures. 
-       See [here](https://www.solo.io/hybrid-app) for more on the Hybrid App paradigm. 
-
-
-## What makes Gloo Edge unique
-- **Function-level routing allows integration of legacy applications, microservices and serverless** : Gloo Edge can route requests directly to _functions_. Request to Function can be a serverless function call (e.g. Lambda, Google Cloud Function, OpenFaaS Function, etc.), an API call on a microservice or a legacy service (e.g. a REST API call, OpenAPI operation, XML/SOAP request etc.), or publishing to a message queue (e.g. NATS, AMQP, etc.). This unique ability is what makes Gloo Edge the only API gateway that supports hybrid apps as well as the only one that does not tie the user to a specific paradigm. 
-- **Gloo Edge incorporates vetted open-source projects to provide broad functionality** : Gloo Edge support high-quality features by integrating with top open-source projects, including gRPC, GraphQL, OpenTracing, NATS and more. Gloo Edge's architecture allows rapid integration of future popular open-source projects as they emerge. 
-- **Full automated discovery lets users move fast** : Upon launch, Gloo Edge creates a catalog of all available destinations and continuously maintains it up to date. This takes the responsibility for 'bookkeeping' away from the developers and guarantees that new feature become available as soon as they are ready. Gloo Edge discovers across IaaS, PaaS and FaaS providers as well as Swagger, gRPC, and GraphQL. 
-- **Gloo Edge integrates intimately with the user's environment** : with Gloo Edge, users are free to choose their favorite tools for scheduling (such as K8s, Nomad, OpenShift, etc), persistence (K8s, Consul, etcd, etc) and security (K8s, Vault). 
-
-
-## Next Steps
-- Join us on our Slack channel: [https://slack.solo.io/](https://slack.solo.io/)
-- Follow us on Twitter: [https://twitter.com/soloio_inc](https://twitter.com/soloio_inc)
-- Check out the docs: [https://gloo.solo.io](https://gloo.solo.io)
-- Check out the code and contribute: [Contribution Guides](/devel/contributing)
-- Contribute to the [Docs](docs/)
-
-### Thanks
-
-**Gloo Edge** would not be possible without the valuable open-source work of projects in the community. We would like to extend a special thank-you to [Envoy](https://www.envoyproxy.io).
-
-
-# Security
-
-*Reporting security issues* : We take Gloo Edge's security very seriously. If you've found a security issue or a potential security issue in Gloo Edge, please DO NOT file a public Github issue, instead send your report privately to [security@solo.io](mailto:security@solo.io).
+## Security
+*Reporting security issues* : We take kgateway's security very seriously. If you've found a security issue or a potential security issue in kgateway, please DO NOT file a public GitHub issue. Instead follow [the directions laid out in the kgateway/community respository](https://github.com/kgateway-dev/community/blob/main/CVE.md).

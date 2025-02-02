@@ -1,3 +1,5 @@
+//go:build ignore
+
 package e2e_test
 
 import (
@@ -5,29 +7,32 @@ import (
 	"errors"
 	"time"
 
-	"github.com/solo-io/gloo/test/ginkgo/decorators"
+	"github.com/kgateway-dev/kgateway/test/ginkgo/decorators"
 
 	"github.com/golang/protobuf/ptypes/duration"
-	v1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	"github.com/solo-io/gloo/test/e2e"
-	"github.com/solo-io/gloo/test/gomega/matchers"
 
-	"github.com/solo-io/gloo/test/testutils"
+	v1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/e2e"
+	"github.com/kgateway-dev/kgateway/test/gomega/matchers"
 
-	consulplugin "github.com/solo-io/gloo/projects/gloo/pkg/plugins/consul"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 
-	"github.com/solo-io/gloo/test/helpers"
+	consulplugin "github.com/kgateway-dev/kgateway/projects/gloo/pkg/plugins/consul"
+
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/kgateway-dev/kgateway/test/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/hashicorp/consul/api"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	consulapi "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/consul"
-	"github.com/solo-io/gloo/projects/gloo/pkg/upstreams/consul"
-	"github.com/solo-io/gloo/test/services"
-	"github.com/solo-io/gloo/test/v1helpers"
+
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	consulapi "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/consul"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/upstreams/consul"
+	"github.com/kgateway-dev/kgateway/test/services"
+	"github.com/kgateway-dev/kgateway/test/v1helpers"
 )
 
 var _ = Describe("Consul e2e", decorators.Consul, func() {
@@ -277,7 +282,7 @@ var _ = Describe("Consul e2e", decorators.Consul, func() {
 				Fail("err chan closed prematurely")
 			case svcsReceived := <-svcsChan:
 				// the default consul svc in dc1 does not show up in our watch because of service tag filtering
-				Expect(svcsReceived).To(HaveLen(0))
+				Expect(svcsReceived).To(BeEmpty())
 			case <-time.After(5 * time.Second):
 				Fail("timeout waiting for services")
 			}
@@ -289,7 +294,7 @@ var _ = Describe("Consul e2e", decorators.Consul, func() {
 					return errors.New("err chan closed prematurely")
 				case svcsReceived := <-svcsChan:
 					// happy path, continue
-					ExpectWithOffset(1, svcsReceived).To(HaveLen(0))
+					ExpectWithOffset(1, svcsReceived).To(BeEmpty())
 				case <-time.After(100 * time.Millisecond):
 					// happy path, continue
 				}
@@ -303,7 +308,7 @@ var _ = Describe("Consul e2e", decorators.Consul, func() {
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 					return errors.New("err chan closed prematurely")
 				case svcsReceived := <-svcsChan:
-					ExpectWithOffset(1, svcsReceived).To(HaveLen(0)) // we actually expect len(0) if anything; this is just here to get a nice output / diff before we fail regardless
+					ExpectWithOffset(1, svcsReceived).To(BeEmpty()) // we actually expect len(0) if anything; this is just here to get a nice output / diff before we fail regardless
 					Fail("did not expect to receive empty services")
 				case <-time.After(100 * time.Millisecond):
 					// happy path, continue
@@ -361,7 +366,7 @@ var _ = Describe("Consul e2e", decorators.Consul, func() {
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 					return errors.New("err chan closed prematurely")
 				case svcsReceived := <-svcsChan:
-					ExpectWithOffset(1, svcsReceived).To(HaveLen(0)) // we actually expect len(1) if anything; this is just here to get a nice output / diff before we fail regardless
+					ExpectWithOffset(1, svcsReceived).To(BeEmpty()) // we actually expect len(1) if anything; this is just here to get a nice output / diff before we fail regardless
 					Fail("did not expect to receive services")
 				case <-time.After(100 * time.Millisecond):
 					// happy path, continue
@@ -427,7 +432,7 @@ var _ = Describe("Consul e2e", decorators.Consul, func() {
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 					return errors.New("err chan closed prematurely")
 				case svcsReceived := <-svcsChan:
-					ExpectWithOffset(1, svcsReceived).To(HaveLen(0)) // we actually expect len(1) if anything; this is just here to get a nice output / diff before we fail regardless
+					ExpectWithOffset(1, svcsReceived).To(BeEmpty()) // we actually expect len(1) if anything; this is just here to get a nice output / diff before we fail regardless
 					Fail("did not expect to receive services")
 				case <-time.After(100 * time.Millisecond):
 					// happy path, continue

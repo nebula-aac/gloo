@@ -1,32 +1,43 @@
+//go:build ignore
+
 package e2e_test
 
 import (
 	"encoding/base64"
+	"encoding/json"
 
-	"github.com/solo-io/gloo/test/testutils"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"github.com/kgateway-dev/kgateway/test/testutils"
+
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	v1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	extauthv1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/enterprise/options/extauth/v1"
-	gloov1static "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/static"
-	testmatchers "github.com/solo-io/gloo/test/gomega/matchers"
-	"github.com/solo-io/gloo/test/helpers"
+	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
+	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
+
+	v1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	extauthv1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/enterprise/options/extauth/v1"
+	gloov1static "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/static"
+	testmatchers "github.com/kgateway-dev/kgateway/test/gomega/matchers"
+	"github.com/kgateway-dev/kgateway/test/helpers"
 
 	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/solo-io/gloo/test/e2e"
 
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/core/matchers"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/transformation"
+	"github.com/kgateway-dev/kgateway/test/e2e"
+
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/core/matchers"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/transformation"
 )
 
-var _ = Describe("Staged Transformation", func() {
+var _ = Describe("Staged Transformation", FlakeAttempts(3), func() {
+	// We added the FlakeAttempts decorator to try to reduce the impact of the flakes outlined in:
+	// https://github.com/kgateway-dev/kgateway/issues/9292
 
 	var (
 		testContext *e2e.TestContext
@@ -276,6 +287,122 @@ var _ = Describe("Staged Transformation", func() {
 			}, "15s", ".5s").Should(Succeed())
 		})
 
+		It("Can add endpoint metadata to headers using postRouting transformation", func() {
+			testContext.PatchDefaultUpstream(func(u *gloov1.Upstream) *gloov1.Upstream {
+				static := u.GetStatic()
+				if static == nil {
+					return u
+				}
+				// Set a metadata key in the transformation namespace
+				static.Hosts[0].Metadata = map[string]*structpb.Struct{
+					"io.solo.transformation": {
+						Fields: map[string]*structpb.Value{
+							"key": {
+								Kind: &structpb.Value_StringValue{
+									StringValue: "value",
+								},
+							},
+						},
+					},
+				}
+				return u
+			})
+			testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+				vsBuilder := helpers.BuilderFromVirtualService(vs)
+				vsBuilder.WithVirtualHostOptions(&gloov1.VirtualHostOptions{
+					StagedTransformations: &transformation.TransformationStages{
+						PostRouting: &transformation.RequestResponseTransformations{
+							ResponseTransforms: []*transformation.ResponseMatch{{
+								ResponseTransformation: &transformation.Transformation{
+									TransformationType: &transformation.Transformation_TransformationTemplate{
+										TransformationTemplate: &transformation.TransformationTemplate{
+											ParseBodyBehavior: transformation.TransformationTemplate_DontParse,
+											BodyTransformation: &transformation.TransformationTemplate_Body{
+												Body: &transformation.InjaTemplate{Text: "{{host_metadata(\"key\")}}"},
+											},
+											HeadersToAppend: []*transformation.TransformationTemplate_HeaderToAppend{
+												{
+													Key:   "x-custom-header",
+													Value: &transformation.InjaTemplate{Text: "{{host_metadata(\"key\")}}"},
+												},
+											},
+										},
+									},
+								},
+							}},
+						},
+					},
+				})
+				return vsBuilder.Build()
+			})
+
+			// send a request, expect that:
+			// 1. The body will contain the metadata value
+			// 2. The header `x-custom-header` will contain the metadata value
+
+			requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody("123456789")
+			Eventually(func(g Gomega) {
+				g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+					StatusCode: http.StatusOK,
+					Body:       "value",
+					Headers: map[string]interface{}{
+						"x-custom-header": "value",
+					},
+				}))
+			}, "15s", ".5s").Should(Succeed())
+		})
+
+		It("Can modify specific body keys using MergeJsonKeys", func() {
+			testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+				vsBuilder := helpers.BuilderFromVirtualService(vs)
+				vsBuilder.WithVirtualHostOptions(&gloov1.VirtualHostOptions{
+					StagedTransformations: &transformation.TransformationStages{
+						PostRouting: &transformation.RequestResponseTransformations{
+							ResponseTransforms: []*transformation.ResponseMatch{{
+								ResponseTransformation: &transformation.Transformation{
+									TransformationType: &transformation.Transformation_TransformationTemplate{
+										TransformationTemplate: &transformation.TransformationTemplate{
+											BodyTransformation: &transformation.TransformationTemplate_MergeJsonKeys{
+												MergeJsonKeys: &transformation.MergeJsonKeys{
+													JsonKeys: map[string]*transformation.MergeJsonKeys_OverridableTemplate{
+														"key2": {
+															Tmpl: &transformation.InjaTemplate{Text: "\"new value\""},
+														},
+														"key3": {
+															Tmpl: &transformation.InjaTemplate{Text: "\"value3\""},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							}},
+						},
+					},
+				})
+				return vsBuilder.Build()
+			})
+
+			// send a request, expect that:
+			// 1. The body will contain the metadata value
+			// 2. The header `x-custom-header` will contain the metadata value
+			jsnBody := map[string]any{
+				"key1": "value1",
+				"key2": "value2",
+			}
+			bdyByt, err := json.Marshal(jsnBody)
+			Expect(err).NotTo(HaveOccurred())
+
+			requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(string(bdyByt))
+			Eventually(func(g Gomega) {
+				g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+					StatusCode: http.StatusOK,
+					Body:       "{\"key1\":\"value1\",\"key2\":\"new value\",\"key3\":\"value3\"}",
+				}))
+			}, "15s", ".5s").Should(Succeed())
+		})
+
 		It("Can base64 decode and transform headers", func() {
 			testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
 				vsBuilder := helpers.BuilderFromVirtualService(vs)
@@ -309,6 +436,330 @@ var _ = Describe("Staged Transformation", func() {
 					"X-New-Custom-Header": ContainSubstring("test2"),
 				}))
 			}, "15s", ".5s").Should(Succeed())
+		})
+
+		Context("Extractors", func() {
+			var (
+				extraction             *transformation.Extraction
+				transformationTemplate *transformation.TransformationTemplate
+				vHostOpts              *gloov1.VirtualHostOptions
+			)
+
+			BeforeEach(func() {
+				extraction = &transformation.Extraction{
+					Source: &transformation.Extraction_Body{},
+					Regex:  ".*",
+				}
+
+				transformationTemplate = &transformation.TransformationTemplate{
+					ParseBodyBehavior: transformation.TransformationTemplate_DontParse,
+					BodyTransformation: &transformation.TransformationTemplate_Body{
+						Body: &transformation.InjaTemplate{
+							Text: "{{ foo }}",
+						},
+					},
+					Extractors: map[string]*transformation.Extraction{"foo": extraction},
+				}
+
+				vHostOpts = &gloov1.VirtualHostOptions{
+					StagedTransformations: &transformation.TransformationStages{
+						Regular: &transformation.RequestResponseTransformations{
+							RequestTransforms: []*transformation.RequestMatch{{
+								RequestTransformation: &transformation.Transformation{
+									TransformationType: &transformation.Transformation_TransformationTemplate{
+										TransformationTemplate: transformationTemplate,
+									},
+								},
+							}},
+						},
+					},
+				}
+			})
+
+			Describe("Extract mode", func() {
+				It("Can extract text from a subset of the input", func() {
+					extraction.Mode = transformation.Extraction_EXTRACT
+					extraction.Regex = ".*(test).*"
+					extraction.Subgroup = 1
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       "test",
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Defaults to extract mode", func() {
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       body,
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Doesn't extract if regex doesn't match", func() {
+					extraction.Mode = transformation.Extraction_EXTRACT
+					extraction.Regex = "will not match"
+					extraction.Subgroup = 0
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       "",
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Doesn't extract if regex doesn't match entire input", func() {
+					extraction.Mode = transformation.Extraction_EXTRACT
+					extraction.Regex = "is a test"
+					extraction.Subgroup = 0
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       "",
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Rejects config if replacement_text is set", func() {
+					extraction.Mode = transformation.Extraction_EXTRACT
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "test"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					helpers.EventuallyResourceRejected(func() (resources.InputResource, error) {
+						vs, err := testContext.TestClients().VirtualServiceClient.Read(writeNamespace, e2e.DefaultVirtualServiceName, clients.ReadOpts{})
+						return vs, err
+					})
+				})
+
+			})
+			Describe("Single Replace mode", func() {
+				It("Can extract a substring from the body and replace it in the response", func() {
+					extraction.Mode = transformation.Extraction_SINGLE_REPLACE
+					extraction.Regex = ".*(test).*"
+					extraction.Subgroup = 1
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       "this is a replaced",
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Can replace from subgroup 0 when regex matches entire body", func() {
+					extraction.Mode = transformation.Extraction_SINGLE_REPLACE
+					extraction.Regex = "this is a (test)"
+					extraction.Subgroup = 0
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       "replaced",
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Returns input if regex doesn't match", func() {
+					extraction.Mode = transformation.Extraction_SINGLE_REPLACE
+					extraction.Regex = "will not match"
+					extraction.Subgroup = 0
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       body,
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Returns input if regex doesn't match entire input", func() {
+					extraction.Mode = transformation.Extraction_SINGLE_REPLACE
+					extraction.Regex = "is a test"
+					extraction.Subgroup = 0
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "this is a test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       body,
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Rejects config if replacement_text is not set", func() {
+					extraction.Mode = transformation.Extraction_SINGLE_REPLACE
+					extraction.Regex = ".*(test).*"
+					extraction.Subgroup = 1
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					helpers.EventuallyResourceRejected(func() (resources.InputResource, error) {
+						vs, err := testContext.TestClients().VirtualServiceClient.Read(writeNamespace, e2e.DefaultVirtualServiceName, clients.ReadOpts{})
+						return vs, err
+					})
+				})
+			})
+			Describe("Replace ALL mode", func() {
+				It("Can replace multiple instances of the regex in the body", func() {
+					extraction.Mode = transformation.Extraction_REPLACE_ALL
+					extraction.Regex = "test"
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "test test test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       "replaced replaced replaced",
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Returns input if regex doesn't match", func() {
+					extraction.Mode = transformation.Extraction_REPLACE_ALL
+					extraction.Regex = "will not match"
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					body := "test test test"
+					requestBuilder := testContext.GetHttpRequestBuilder().WithPostBody(body)
+					Eventually(func(g Gomega) {
+						g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(testmatchers.HaveHttpResponse(&testmatchers.HttpResponse{
+							StatusCode: http.StatusOK,
+							Body:       body,
+						}))
+					}, "5s", ".5s").Should(Succeed())
+				})
+
+				It("Rejects config if replacement_text is not set", func() {
+					extraction.Mode = transformation.Extraction_REPLACE_ALL
+					extraction.Regex = "test"
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					helpers.EventuallyResourceRejected(func() (resources.InputResource, error) {
+						vs, err := testContext.TestClients().VirtualServiceClient.Read(writeNamespace, e2e.DefaultVirtualServiceName, clients.ReadOpts{})
+						return vs, err
+					})
+				})
+
+				It("Rejects config if subgroup is set", func() {
+					extraction.Mode = transformation.Extraction_REPLACE_ALL
+					extraction.Regex = "test"
+					extraction.Subgroup = 1
+					extraction.ReplacementText = &wrapperspb.StringValue{Value: "replaced"}
+
+					testContext.PatchDefaultVirtualService(func(vs *v1.VirtualService) *v1.VirtualService {
+						vsBuilder := helpers.BuilderFromVirtualService(vs)
+						vsBuilder.WithVirtualHostOptions(vHostOpts)
+						return vsBuilder.Build()
+					})
+
+					helpers.EventuallyResourceRejected(func() (resources.InputResource, error) {
+						vs, err := testContext.TestClients().VirtualServiceClient.Read(writeNamespace, e2e.DefaultVirtualServiceName, clients.ReadOpts{})
+						return vs, err
+					})
+				})
+			})
 		})
 
 		// helper function for the "can enable enhanced logging" table test

@@ -20,10 +20,12 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/go-github/v32/github"
 	"github.com/rotisserie/eris"
-	. "github.com/solo-io/gloo/docs/cmd/securityscanutils"
 	changelogdocutils "github.com/solo-io/go-utils/changeloggenutils"
 	"github.com/solo-io/go-utils/githubutils"
+	"github.com/solo-io/go-utils/versionutils"
 	"github.com/spf13/cobra"
+
+	. "github.com/kgateway-dev/kgateway/docs/cmd/securityscanutils"
 )
 
 func main() {
@@ -98,7 +100,7 @@ func changelogMdFromGithubCmd(opts *options) *cobra.Command {
 	return app
 }
 
-func enterpriseHelmValuesMdFromGithubCmd(opts *options) *cobra.Command {
+func enterpriseHelmValuesMdFromGithubCmd(_ *options) *cobra.Command {
 	app := &cobra.Command{
 		Use:   "get-enterprise-helm-values",
 		Short: "Get documentation of valid helm values from Gloo Enterprise github",
@@ -193,6 +195,10 @@ const (
 	repoOwner          = "solo-io"
 	glooOpenSourceRepo = "gloo"
 	glooEnterpriseRepo = "solo-projects"
+
+	// donated names
+	repoOwnerDonated      = "kgateway-dev"
+	donatedOpenSourceRepo = "kgateway"
 )
 
 const (
@@ -219,20 +225,46 @@ var (
 // Github defaults to a chronological order
 func generateChangelogMd(opts *options) error {
 	client := githubutils.GetClientOrExit(context.Background())
+	preNameChangeGatewayVersion := versionutils.NewVersion(1, 13, 0, "", 0)
 	switch opts.targetRepo {
 	case glooDocGen:
+
 		generator := changelogdocutils.NewMinorReleaseGroupedChangelogGenerator(changelogdocutils.Options{
-			MainRepo:         "gloo",
-			RepoOwner:        "solo-io",
+			MainRepo:         donatedOpenSourceRepo,
+			RepoOwner:        repoOwnerDonated,
+			MaxVersion:       preNameChangeGatewayVersion,
 			MainRepoReleases: getCachedReleases(glooCachedReleasesFile),
 		}, client)
-		out, err := generator.GenerateJSON(context.Background())
+
+		out, err := generator.AddToOutput(context.Background())
 		if err != nil {
 			return err
 		}
-		fmt.Println(out)
+
+		generator = changelogdocutils.NewMinorReleaseGroupedChangelogGenerator(changelogdocutils.Options{
+			MainRepo:         glooOpenSourceRepo,
+			RepoOwner:        repoOwner,
+			MinVersion:       preNameChangeGatewayVersion,
+			MainRepoReleases: getCachedReleases(glooCachedReleasesFile),
+		}, client)
+		out2, err := generator.AddToOutput(context.Background())
+		if err != nil {
+			return err
+		}
+
+		err = out2.AddReleaseData(out)
+		if err != nil {
+			return err
+		}
+
+		body, err := out2.GenerateJSON()
+		if err != nil {
+			return err
+		}
+		fmt.Println(body)
+
 	case glooEDocGen:
-		err := generateGlooEChangelog()
+		err := generateGlooEChangelog(preNameChangeGatewayVersion)
 		if err != nil {
 			return err
 		}
@@ -244,7 +276,7 @@ func generateChangelogMd(opts *options) error {
 }
 
 // Fetches Gloo Enterprise releases, merges in open source release notes, and orders them by version
-func generateGlooEChangelog() error {
+func generateGlooEChangelog(preNameVersion *versionutils.Version) error {
 	// Initialize Auth
 	ctx := context.Background()
 	ghToken := os.Getenv("GITHUB_TOKEN")
@@ -259,6 +291,7 @@ func generateGlooEChangelog() error {
 		NumVersions:           200,
 		MainRepo:              glooEnterpriseRepo,
 		DependentRepo:         glooOpenSourceRepo,
+		MinVersion:            preNameVersion,
 		RepoOwner:             repoOwner,
 		MainRepoReleases:      getCachedReleases(glooeCachedReleasesFile),
 		DependentRepoReleases: getCachedReleases(glooCachedReleasesFile),
@@ -268,6 +301,7 @@ func generateGlooEChangelog() error {
 		return err
 	}
 	generator := changelogdocutils.NewMergedReleaseGeneratorWithDepFn(opts, client, depFn)
+
 	out, err := generator.GenerateJSON(context.Background())
 	if err != nil {
 		return err
@@ -346,7 +380,6 @@ func scanImagesForRepo(ctx context.Context, targetRepo string, vulnerabilityActi
 				},
 				VersionConstraint:                      versionConstraint,
 				ImageRepo:                              "quay.io/solo-io",
-				UploadCodeScanToGithub:                 false,
 				CreateGithubIssuePerVersion:            vulnerabilityAction == "github-issue-all",
 				CreateGithubIssueForLatestPatchVersion: vulnerabilityAction == "github-issue-latest",
 			},
@@ -364,7 +397,6 @@ func scanImagesForRepo(ctx context.Context, targetRepo string, vulnerabilityActi
 				},
 				VersionConstraint:                      versionConstraint,
 				ImageRepo:                              "quay.io/solo-io",
-				UploadCodeScanToGithub:                 false,
 				CreateGithubIssuePerVersion:            vulnerabilityAction == "github-issue-all",
 				CreateGithubIssueForLatestPatchVersion: vulnerabilityAction == "github-issue-latest",
 			},
@@ -443,7 +475,7 @@ func generateSecurityScanGlooE(ctx context.Context) error {
 	return BuildSecurityScanReportGlooE(versionsToScan)
 }
 
-func fetchEnterpriseHelmValues(args []string) error {
+func fetchEnterpriseHelmValues(_ []string) error {
 	ctx := context.Background()
 	client, err := githubutils.GetClient(ctx)
 	if err != nil {
@@ -456,11 +488,9 @@ func fetchEnterpriseHelmValues(args []string) error {
 	if err != nil {
 		return err
 	}
-	version, err := semver.NewVersion(string(semverReleaseTag))
-	if err != nil {
-		return err
-	}
-	minorReleaseTag := fmt.Sprintf("v%d.%d.x", version.Major(), version.Minor())
+
+	minorReleaseTag := "v" + string(semverReleaseTag)
+
 	files, err := githubutils.GetFilesFromGit(ctx, client, repoOwner, glooEnterpriseRepo, minorReleaseTag, path)
 	if err != nil {
 		return err

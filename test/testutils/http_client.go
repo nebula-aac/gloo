@@ -1,3 +1,5 @@
+//go:build ignore
+
 package testutils
 
 import (
@@ -20,6 +22,8 @@ import (
 //
 // The solution would be to increase the client timeout defined below. We chose 2 seconds as a reasonable
 // default which allows tests to pass consistently.
+// Since http.Client caches TCP connections, it is advised to create a new client via DefaultClientBuilder().Build()
+// each time while testing any feature that operates at L4 to avoid TCP connection caching issues.
 var DefaultHttpClient = &http.Client{
 	Timeout: time.Second * 2,
 }
@@ -34,6 +38,8 @@ type HttpClientBuilder struct {
 }
 
 // DefaultClientBuilder returns an HttpClientBuilder with some default values
+// Since http.Client caches TCP connections, it is advised to create a new client each time
+// while testing any feature that operates at L4.
 func DefaultClientBuilder() *HttpClientBuilder {
 	return &HttpClientBuilder{
 		timeout:    DefaultHttpClient.Timeout,

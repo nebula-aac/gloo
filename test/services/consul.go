@@ -1,3 +1,5 @@
+//go:build ignore
+
 package services
 
 import (
@@ -16,13 +18,8 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"github.com/solo-io/gloo/test/services/utils"
-	"github.com/solo-io/gloo/test/testutils"
-)
-
-const (
-	consulDockerImage = "hashicorp/consul:1.15.3"
-	consulBinaryName  = "consul"
+	"github.com/kgateway-dev/kgateway/test/services/utils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 )
 
 type ConsulFactory struct {
@@ -49,8 +46,8 @@ func NewConsulFactory() (*ConsulFactory, error) {
 		return nil, err
 	}
 	binaryPath, err := utils.GetBinary(utils.GetBinaryParams{
-		Filename:    consulBinaryName,
-		DockerImage: consulDockerImage,
+		Filename:    testutils.ConsulBinaryName,
+		DockerImage: testutils.ConsulDockerImage,
 		DockerPath:  "/bin/consul",
 		EnvKey:      testutils.ConsulBinary,
 		TmpDir:      tmpdir,

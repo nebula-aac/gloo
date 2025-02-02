@@ -1,3 +1,5 @@
+//go:build ignore
+
 package e2e_test
 
 import (
@@ -8,31 +10,35 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/solo-io/gloo/test/services/envoy"
+	"github.com/kgateway-dev/kgateway/test/e2e"
+	"github.com/kgateway-dev/kgateway/test/services/envoy"
 
-	"github.com/solo-io/gloo/test/testutils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/gloosnapshot"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/hcm"
-	"github.com/solo-io/gloo/projects/gloo/pkg/translator"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gatewaydefaults "github.com/solo-io/gloo/projects/gateway/pkg/defaults"
-	envoytrace_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/config/trace/v3"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	static_plugin_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/static"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/tracing"
-	gloohelpers "github.com/solo-io/gloo/test/helpers"
-	"github.com/solo-io/gloo/test/v1helpers"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/gloosnapshot"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/hcm"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/translator"
+
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gatewaydefaults "github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
+	envoytrace_gloo "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/external/envoy/config/trace/v3"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	static_plugin_gloo "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/static"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/tracing"
+	gloohelpers "github.com/kgateway-dev/kgateway/test/helpers"
+	"github.com/kgateway-dev/kgateway/test/v1helpers"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	. "github.com/solo-io/gloo/test/gomega"
 
-	"github.com/solo-io/gloo/test/services"
+	. "github.com/kgateway-dev/kgateway/test/gomega"
+
+	"github.com/kgateway-dev/kgateway/test/services"
 )
 
 const (
@@ -59,7 +65,6 @@ var _ = Describe("Tracing config loading", Serial, func() {
 	})
 
 	AfterEach(func() {
-		envoyInstance.Clean()
 		cancel()
 	})
 
@@ -72,7 +77,7 @@ var _ = Describe("Tracing config loading", Serial, func() {
 		})
 
 		It("should send trace msgs to the zipkin server", func() {
-			err := envoyInstance.RunWithConfigFile(int(envoyInstance.HttpPort), "./envoyconfigs/zipkin-envoy-conf.yaml")
+			err := envoyInstance.RunWithConfigFile(ctx, int(envoyInstance.HttpPort), "./envoyconfigs/zipkin-envoy-conf.yaml")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start a dummy server listening on 9411 for Zipkin requests
@@ -130,7 +135,7 @@ var _ = Describe("Tracing config loading", Serial, func() {
 			vsToTestUpstream := gloohelpers.NewVirtualServiceBuilder().
 				WithName("vs-test").
 				WithNamespace(writeNamespace).
-				WithDomain("test.com").
+				WithDomain(e2e.DefaultHost).
 				WithRoutePrefixMatcher("test", "/").
 				WithRouteActionToUpstream("test", testUpstream.Upstream).
 				Build()
@@ -198,7 +203,7 @@ var _ = Describe("Tracing config loading", Serial, func() {
 				v1helpers.CurlRequest{
 					RootCA: nil,
 					Port:   envoyInstance.HttpPort,
-					Host:   "test.com", // to match the vs-test
+					Host:   e2e.DefaultHost, // to match the vs-test
 					Path:   "/",
 					Body:   []byte("solo.io test"),
 				},
@@ -487,7 +492,7 @@ func startCancellableTracingServer(serverContext context.Context, address string
 
 func createRequestWithTracingEnabled(address string, port uint32) func() (string, error) {
 	return func() (string, error) {
-		req, err := http.NewRequest("GET", fmt.Sprintf("http://%s:%d/", address, port), nil)
+		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s:%d/", address, port), nil)
 		if err != nil {
 			return "", err
 		}

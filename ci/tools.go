@@ -18,12 +18,12 @@ limitations under the License.
 package tools
 
 import (
-	_ "github.com/cratonica/2goarray"
-	_ "github.com/envoyproxy/protoc-gen-validate"
+	_ "fybrik.io/crdoc"
+	_ "github.com/ahmetb/gen-crd-api-reference-docs"
 	_ "github.com/golang/mock/mockgen"
 	_ "github.com/saiskee/gettercheck"
-	_ "github.com/solo-io/protoc-gen-ext"
-	_ "github.com/solo-io/protoc-gen-openapi"
 	_ "golang.org/x/tools/cmd/goimports"
 	_ "k8s.io/code-generator"
+	_ "k8s.io/code-generator/cmd/register-gen"
+	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
 )

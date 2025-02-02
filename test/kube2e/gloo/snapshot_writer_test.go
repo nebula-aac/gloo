@@ -1,19 +1,23 @@
+//go:build ignore
+
 package gloo_test
 
 import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/gloosnapshot"
-	"github.com/solo-io/gloo/test/kube2e"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/test/helpers"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/gloosnapshot"
+	"github.com/kgateway-dev/kgateway/test/kube2e"
 
-	"github.com/solo-io/k8s-utils/testutils/helper"
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/helpers"
+
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
+
+	"github.com/kgateway-dev/kgateway/test/kube2e/helper"
 )
 
 // This tests the gloo/test/helpers/snapshot_writer.go functionality in a Kubernetes cluster
@@ -25,34 +29,34 @@ var _ = Describe("SnapshotWriter Test", func() {
 	)
 
 	BeforeEach(func() {
-		// Create a VirtualService routing directly to the testrunner kubernetes service
-		testRunnerDestination := &gloov1.Destination{
+		// Create a VirtualService routing directly to the testserver kubernetes service
+		testServerDestination := &gloov1.Destination{
 			DestinationType: &gloov1.Destination_Kube{
 				Kube: &gloov1.KubernetesServiceDestination{
 					Ref: &core.ResourceRef{
 						Namespace: testHelper.InstallNamespace,
-						Name:      helper.TestrunnerName,
+						Name:      helper.TestServerName,
 					},
-					Port: uint32(helper.TestRunnerPort),
+					Port: uint32(helper.TestServerPort),
 				},
 			},
 		}
-		testRunnerVs := helpers.NewVirtualServiceBuilder().
-			WithName(helper.TestrunnerName).
+		testServerVs := helpers.NewVirtualServiceBuilder().
+			WithName(helper.TestServerName).
 			WithNamespace(testHelper.InstallNamespace).
 			WithLabel(kube2e.UniqueTestResourceLabel, uuid.New().String()).
-			WithDomain(helper.TestrunnerName).
-			WithRoutePrefixMatcher(helper.TestrunnerName, "/").
-			WithRouteActionToSingleDestination(helper.TestrunnerName, testRunnerDestination).
+			WithDomain(helper.TestServerName).
+			WithRoutePrefixMatcher(helper.TestServerName, "/").
+			WithRouteActionToSingleDestination(helper.TestServerName, testServerDestination).
 			Build()
 
 		// The set of resources that these tests will generate
 		glooResources = &gloosnapshot.ApiSnapshot{
 			VirtualServices: gatewayv1.VirtualServiceList{
-				// many tests route to the TestRunner Service so it makes sense to just
+				// many tests route to the TestServer Service so it makes sense to just
 				// always create it
 				// the other benefit is this ensures that all tests start with a valid Proxy CR
-				testRunnerVs,
+				testServerVs,
 			},
 		}
 	})

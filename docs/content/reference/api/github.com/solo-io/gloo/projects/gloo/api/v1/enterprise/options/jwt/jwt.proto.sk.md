@@ -1,6 +1,6 @@
 
 ---
-title: "jwt.proto"
+title: "Jwt"
 weight: 5
 ---
 
@@ -8,12 +8,14 @@ weight: 5
 
 
 ### Package: `jwt.options.gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [JwtStagedVhostExtension](#jwtstagedvhostextension)
+- [JwtStagedRouteProvidersExtension](#jwtstagedrouteprovidersextension)
 - [JwtStagedRouteExtension](#jwtstagedrouteextension)
 - [VhostExtension](#vhostextension)
+- [ValidationPolicy](#validationpolicy)
 - [RouteExtension](#routeextension)
 - [Provider](#provider)
 - [Jwks](#jwks)
@@ -26,7 +28,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/enterprise/options/jwt/jwt.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/enterprise/options/jwt/jwt.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/enterprise/options/jwt/jwt.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/enterprise/options/jwt/jwt.proto)**
 
 
 
@@ -52,6 +54,25 @@ weight: 5
 
 
 ---
+### JwtStagedRouteProvidersExtension
+
+
+
+```yaml
+"beforeExtAuth": .jwt.options.gloo.solo.io.VhostExtension
+"afterExtAuth": .jwt.options.gloo.solo.io.VhostExtension
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `beforeExtAuth` | [.jwt.options.gloo.solo.io.VhostExtension](../jwt.proto.sk/#vhostextension) | Per-route JWT config for the JWT filter that runs before the extauth filter. |
+| `afterExtAuth` | [.jwt.options.gloo.solo.io.VhostExtension](../jwt.proto.sk/#vhostextension) | Per-route JWT config for the JWT filter that runs before the extauth filter. |
+
+
+
+
+---
 ### JwtStagedRouteExtension
 
 
@@ -64,8 +85,8 @@ weight: 5
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
-| `beforeExtAuth` | [.jwt.options.gloo.solo.io.RouteExtension](../jwt.proto.sk/#routeextension) | JWT route config for the JWT filter that runs after the extauth filter. |
-| `afterExtAuth` | [.jwt.options.gloo.solo.io.RouteExtension](../jwt.proto.sk/#routeextension) | JWT route config for the JWT filter that runs after the extauth filter. |
+| `beforeExtAuth` | [.jwt.options.gloo.solo.io.RouteExtension](../jwt.proto.sk/#routeextension) | Per-route JWT config for the JWT filter that runs before the extauth filter. |
+| `afterExtAuth` | [.jwt.options.gloo.solo.io.RouteExtension](../jwt.proto.sk/#routeextension) | Per-route JWT config for the JWT filter that runs before the extauth filter. |
 
 
 
@@ -78,13 +99,29 @@ weight: 5
 ```yaml
 "providers": map<string, .jwt.options.gloo.solo.io.Provider>
 "allowMissingOrFailedJwt": bool
+"validationPolicy": .jwt.options.gloo.solo.io.VhostExtension.ValidationPolicy
 
 ```
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `providers` | `map<string, .jwt.options.gloo.solo.io.Provider>` | Map of JWT provider name to Provider. If specified, multiple providers will be `OR`-ed together and will allow validation to any of the providers. |
-| `allowMissingOrFailedJwt` | `bool` | Allow pass through of JWT requests for this virtual host, even if JWT token is missing or JWT auth failed. If this is false (default false), requests that fail JWT authentication will fail authorization immediately. For example, if a request requires either JWT auth OR another auth method, this can be enabled to allow a failed JWT auth request to pass through to the other auth method. |
+| `allowMissingOrFailedJwt` | `bool` | Allow pass through of JWT requests for this virtual host, even if JWT token is missing or JWT auth failed. If this is false (default false), requests that fail JWT authentication will fail authorization immediately. For example, if a request requires either JWT auth OR another auth method, this can be enabled to allow a failed JWT auth request to pass through to the other auth method. Deprecated: use validation_policy instead. |
+| `validationPolicy` | [.jwt.options.gloo.solo.io.VhostExtension.ValidationPolicy](../jwt.proto.sk/#validationpolicy) | Optional: Configure how JWT validation works, with the flexibility to handle requests with missing or invalid JWTs. By default, after applying JWT policy to a route, only requests that authenticate with a valid JWT succeed. |
+
+
+
+
+---
+### ValidationPolicy
+
+
+
+| Name | Description |
+| ----- | ----------- | 
+| `REQUIRE_VALID` | Default value. Allow only requests that authenticate with a valid JWT to succeed. Note that the `allowMissingOrFailed=true` setting takes precedence. In such a case, even if you explicitly set `validationPolicy=REQUIRE_VALID`, this field is ignored. |
+| `ALLOW_MISSING` | Allow requests to succeed even if JWT authentication is missing, but fail when an invalid JWT token is presented. You might use this setting when later steps depend on input from the JWT. For example, you might add claims from the JWT to request headers with the claimsToHeaders field. As such, you may want to make sure that any provided JWT is valid. If not, the request fails, which informs the requester that their JWT is not valid. Requests without a JWT, however, still succeed and skip JWT validation. |
+| `ALLOW_MISSING_OR_FAILED` | Allow requests to succeed even when a JWT is missing or JWT verification fails. For example, you might apply multiple policies to your routes so that requests can authenticate with either a JWT or another method such as external auth. Use this value to allow a failed JWT auth request to pass through to the other authentication method. |
 
 
 
@@ -172,7 +209,7 @@ weight: 5
 | `url` | `string` | The url used when accessing the upstream for Json Web Key Set. This is used to set the host and path in the request. |
 | `upstreamRef` | [.core.solo.io.ResourceRef](../../../../../../../../../solo-kit/api/v1/ref.proto.sk/#resourceref) | The Upstream representing the Json Web Key Set server. |
 | `cacheDuration` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | Duration after which the cached JWKS should be expired. If not specified, default cache duration is 5 minutes. |
-| `asyncFetch` | [.solo.io.envoy.extensions.filters.http.jwt_authn.v3.JwksAsyncFetch](../../../../../external/envoy/extensions/filters/http/jwt_authn/v3/config.proto.sk/#jwksasyncfetch) | Fetch Jwks asynchronously in the main thread before the listener is activated. Fetched Jwks can be used by all worker threads. If this feature is not enabled: * The Jwks is fetched on-demand when the requests come. During the fetching, first few requests are paused until the Jwks is fetched. * Each worker thread fetches its own Jwks since Jwks cache is per worker thread. If this feature is enabled: * Fetched Jwks is done in the main thread before the listener is activated. Its fetched Jwks can be used by all worker threads. Each worker thread doesn't need to fetch its own. * Jwks is ready when the requests come, not need to wait for the Jwks fetching. |
+| `asyncFetch` | .solo.io.envoy.extensions.filters.http.jwt_authn.v3.JwksAsyncFetch | Fetch Jwks asynchronously in the main thread before the listener is activated. Fetched Jwks can be used by all worker threads. If this feature is not enabled: * The Jwks is fetched on-demand when the requests come. During the fetching, first few requests are paused until the Jwks is fetched. * Each worker thread fetches its own Jwks since Jwks cache is per worker thread. If this feature is enabled: * Fetched Jwks is done in the main thread before the listener is activated. Its fetched Jwks can be used by all worker threads. Each worker thread doesn't need to fetch its own. * Jwks is ready when the requests come, not need to wait for the Jwks fetching. |
 
 
 

@@ -4,6 +4,9 @@ global:
   glooRbac:
     namespaced: true
     nameSuffix: e2e-test-rbac-suffix
+  podSecurityStandards:
+    container:
+      enableRestrictedContainerDefaults: true
 settings:
   singleNamespace: true
   create: true
@@ -13,7 +16,6 @@ settings:
     invalidRouteResponseBody: Gloo Gateway has invalid configuration.
 gateway:
   persistProxySpec: true
-  logLevel: info
   validation:
     allowWarnings: true
     alwaysAcceptResources: false

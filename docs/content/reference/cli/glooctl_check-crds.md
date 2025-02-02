@@ -1,5 +1,6 @@
 ---
 title: "glooctl check-crds"
+description: "Reference for the 'glooctl check-crds' command."
 weight: 5
 ---
 ## glooctl check-crds
@@ -19,6 +20,7 @@ glooctl check-crds [flags]
 ```
   -h, --help                 help for check-crds
       --local-chart string   check against CRDs in helm chart at path specified by this flag (supersedes --version)
+  -n, --namespace string     namespace for reading or writing resources (default "gloo-system")
       --show-yaml            show full yaml of both CRDs that differ
       --version string       version of gloo's CRDs to check against
 ```
@@ -30,7 +32,7 @@ glooctl check-crds [flags]
       --consul-address string      address of the Consul server. Use with --use-consul (default "127.0.0.1:8500")
       --consul-allow-stale-reads   Allows reading using Consul's stale consistency mode.
       --consul-datacenter string   Datacenter to use. If not provided, the default agent datacenter is used. Use with --use-consul
-      --consul-root-key string     key prefix for for Consul key-value storage. (default "gloo")
+      --consul-root-key string     key prefix for the Consul key-value storage. (default "gloo")
       --consul-scheme string       URI scheme for the Consul server. Use with --use-consul (default "http")
       --consul-token string        Token is used to provide a per-request ACL token which overrides the agent's default token. Use with --use-consul
   -i, --interactive                use interactive mode

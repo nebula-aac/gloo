@@ -1,17 +1,20 @@
+//go:build ignore
+
 package helpers_test
 
 import (
 	"hash"
-	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/cors"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/ssl"
-	"github.com/solo-io/gloo/test/helpers"
 	"github.com/solo-io/solo-kit/test/matchers"
+
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/options/cors"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/ssl"
+	"github.com/kgateway-dev/kgateway/test/gomega/assertions"
+	"github.com/kgateway-dev/kgateway/test/helpers"
 )
 
 var _ = Describe("VirtualServiceBuilder", func() {
@@ -20,11 +23,7 @@ var _ = Describe("VirtualServiceBuilder", func() {
 		// This test is important as it checks whether the virtual service builder has a new top level field.
 		// This should happen very rarely, and should be used as an indication that the `Clone` function
 		// most likely needs to change to support this new field
-
-		Expect(reflect.TypeOf(helpers.VirtualServiceBuilder{}).NumField()).To(
-			Equal(7),
-			"wrong number of fields found",
-		)
+		assertions.ExpectNumFields(helpers.VirtualServiceBuilder{}, 7)
 	})
 
 	It("clones all fields", func() {

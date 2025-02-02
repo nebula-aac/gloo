@@ -1,6 +1,6 @@
 
 ---
-title: "ssl.proto"
+title: "Ssl"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [SslConfig](#sslconfig)
@@ -24,7 +24,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/ssl/ssl.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/ssl/ssl.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/ssl/ssl.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/ssl/ssl.proto)**
 
 
 
@@ -121,6 +121,7 @@ SslConfig contains the options necessary to configure an upstream to use TLS ori
 "parameters": .gloo.solo.io.SslParameters
 "alpnProtocols": []string
 "allowRenegotiation": .google.protobuf.BoolValue
+"oneWayTls": .google.protobuf.BoolValue
 
 ```
 
@@ -134,6 +135,7 @@ SslConfig contains the options necessary to configure an upstream to use TLS ori
 | `parameters` | [.gloo.solo.io.SslParameters](../ssl.proto.sk/#sslparameters) |  |
 | `alpnProtocols` | `[]string` | Set Application Level Protocol Negotiation. If empty, it is not set. |
 | `allowRenegotiation` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Allow Tls renegotiation, the default value is false. TLS renegotiation is considered insecure and shouldn’t be used unless absolutely necessary. |
+| `oneWayTls` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | If the SSL config has the ca.crt (root CA) provided, Gloo uses it to perform mTLS by default. Set oneWayTls to true to disable mTLS in favor of server-only TLS (one-way TLS), even if Gloo has the root CA. This flag does nothing if SDS is configured. If unset, defaults to false. |
 
 
 

@@ -1,12 +1,16 @@
+//go:build ignore
+
 package services
 
 import (
 	"context"
 	"fmt"
 
-	v1alpha1 "github.com/solo-io/gloo/projects/gloo/pkg/api/external/solo/ratelimit"
-	extauthv1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/enterprise/options/extauth/v1"
-	graphqlv1beta1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/enterprise/options/graphql/v1beta1"
+	v1alpha1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/external/solo/ratelimit"
+	extauthv1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/enterprise/options/extauth/v1"
+	graphqlv1beta1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/enterprise/options/graphql/v1beta1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/bootstrap/clients/vault"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/xds"
 
 	"net"
 	"net/http"
@@ -15,7 +19,7 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"github.com/solo-io/gloo/test/ginkgo/parallel"
+	"github.com/kgateway-dev/kgateway/test/ginkgo/parallel"
 
 	"github.com/golang/protobuf/proto"
 
@@ -26,19 +30,19 @@ import (
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 
-	"github.com/solo-io/gloo/pkg/bootstrap/leaderelector/singlereplica"
+	"github.com/kgateway-dev/kgateway/pkg/bootstrap/leaderelector/singlereplica"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/gloosnapshot"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/gloosnapshot"
 
-	"github.com/solo-io/gloo/pkg/utils/settingsutil"
+	"github.com/kgateway-dev/kgateway/pkg/utils/settingsutil"
 
-	"github.com/solo-io/gloo/pkg/utils/statusutils"
+	"github.com/kgateway-dev/kgateway/pkg/utils/statusutils"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/syncer/setup"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/syncer/setup"
 
-	"github.com/solo-io/gloo/projects/gateway/pkg/translator"
+	"github.com/kgateway-dev/kgateway/projects/gateway/pkg/translator"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/upstreams/consul"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/upstreams/consul"
 
 	"github.com/solo-io/solo-kit/pkg/api/external/kubernetes/service"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/kube/cache"
@@ -52,11 +56,11 @@ import (
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/factory"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/memory"
 
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/bootstrap"
-	bootstrap_clients "github.com/solo-io/gloo/projects/gloo/pkg/bootstrap/clients"
 	"google.golang.org/grpc"
+
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/bootstrap"
 
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"go.uber.org/zap"
@@ -66,10 +70,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	fds_syncer "github.com/solo-io/gloo/projects/discovery/pkg/fds/syncer"
-	uds_syncer "github.com/solo-io/gloo/projects/discovery/pkg/uds/syncer"
-	"github.com/solo-io/gloo/projects/gloo/pkg/defaults"
 	"k8s.io/client-go/kubernetes"
+
+	fds_syncer "github.com/kgateway-dev/kgateway/projects/discovery/pkg/fds/syncer"
+	uds_syncer "github.com/kgateway-dev/kgateway/projects/discovery/pkg/uds/syncer"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/defaults"
 )
 
 var glooPortBase = uint32(30400)
@@ -208,7 +213,7 @@ func constructTestSettings(runOptions *RunOptions) *gloov1.Settings {
 		Gateway: &gloov1.GatewayOptions{
 			Validation: &gloov1.GatewayOptions_ValidationOptions{
 				// To validate transformations, we call out to an Envoy binary running in validate mode
-				// https://github.com/solo-io/gloo/blob/01d04751f72c168e304977c4f67fdbcbf30232a9/projects/gloo/pkg/bootstrap/bootstrap_validation.go#L28
+				// https://github.com/kgateway-dev/kgateway/blob/01d04751f72c168e304977c4f67fdbcbf30232a9/projects/gloo/pkg/bootstrap/bootstrap_validation.go#L28
 				// This binary is present in our CI/CD pipeline. But when running locally it is not, so we fallback to the Upstream Envoy binary
 				// which doesn't have the custom Solo.io types registered with the deserializer. Therefore, when running locally tests will fail,
 				// and the logs will contain:
@@ -298,7 +303,7 @@ func constructTestOpts(ctx context.Context, runOptions *RunOptions, settings *gl
 	var kubeCoreCache corecache.KubeCoreCache
 	if runOptions.KubeClient != nil {
 		var err error
-		kubeCoreCache, err = cache.NewKubeCoreCacheWithOptions(ctx, runOptions.KubeClient, time.Hour, settings.GetWatchNamespaces())
+		kubeCoreCache, err = cache.NewKubeCoreCacheWithOptions(ctx, runOptions.KubeClient, time.Hour, settingsutil.GetNamespacesToWatch(settings))
 		Expect(err).NotTo(HaveOccurred())
 	}
 	var validationOpts *translator.ValidationOpts
@@ -328,10 +333,9 @@ func constructTestOpts(ctx context.Context, runOptions *RunOptions, settings *gl
 		// The test author has configured the secret source to be Vault, instead of an in memory cache
 		// As a result, we need to construct a client to communicate with that vault instance
 		vaultSecretSource := settings.GetVaultSecretSource()
-
-		vaultClient, err := bootstrap_clients.VaultClientForSettings(vaultSecretSource)
+		vaultClient, err := vault.VaultClientForSettings(ctx, vaultSecretSource)
 		Expect(err).NotTo(HaveOccurred())
-		secretFactory = bootstrap_clients.NewVaultSecretClientFactory(bootstrap_clients.NoopVaultClientInitFunc(vaultClient), vaultSecretSource.GetPathPrefix(), vaultSecretSource.GetRootKey())
+		secretFactory = vault.NewVaultSecretClientFactory(ctx, vault.NoopVaultClientInitFunc(vaultClient), vaultSecretSource.GetPathPrefix(), vaultSecretSource.GetRootKey())
 	}
 
 	return bootstrap.Opts{
@@ -354,15 +358,15 @@ func constructTestOpts(ctx context.Context, runOptions *RunOptions, settings *gl
 		RouteOptions:            f,
 		VirtualHostOptions:      f,
 		KubeServiceClient:       newServiceClient(ctx, f, runOptions),
-		WatchNamespaces:         settings.GetWatchNamespaces(),
+		WatchNamespaces:         settingsutil.GetNamespacesToWatch(settings),
 		WatchOpts: clients.WatchOpts{
 			Ctx:         ctx,
 			RefreshRate: time.Second / 10,
 		},
-		ControlPlane: setup.NewControlPlane(ctx, grpcServer, &net.TCPAddr{
+		ControlPlane: setup.NewControlPlane(ctx, xds.NewAdsSnapshotCache(ctx), grpcServer, &net.TCPAddr{
 			IP:   net.IPv4zero,
 			Port: int(runOptions.ports.Gloo),
-		}, nil, true),
+		}, bootstrap.KubernetesControlPlaneConfig{}, nil, true),
 		ValidationServer: setup.NewValidationServer(ctx, grpcServerValidation, &net.TCPAddr{
 			IP:   net.IPv4zero,
 			Port: int(runOptions.ports.Validation),
@@ -378,6 +382,11 @@ func constructTestOpts(ctx context.Context, runOptions *RunOptions, settings *gl
 		GatewayControllerEnabled: settings.GetGateway().GetEnableGatewayController().GetValue(),
 		ValidationOpts:           validationOpts,
 		Identity:                 singlereplica.Identity(),
+		GlooGateway:              bootstrap.GlooGateway{
+			// The K8s Gateway Integration depends on a functioning k8s cluster
+			// These tests are designed to be run in-memory, without a true cluster
+			// TODO: delete any tests that cannot run when k8s gw api is used
+		},
 	}
 }
 
@@ -441,6 +450,8 @@ func getTestClients(ctx context.Context, bootstrapOpts bootstrap.Opts) TestClien
 	Expect(err).NotTo(HaveOccurred())
 	proxyClient, err := gloov1.NewProxyClient(ctx, bootstrapOpts.Proxies)
 	Expect(err).NotTo(HaveOccurred())
+	routeTableClient, err := gatewayv1.NewRouteTableClient(ctx, bootstrapOpts.RouteTables)
+	Expect(err).NotTo(HaveOccurred())
 
 	authConfigClient, err := extauthv1.NewAuthConfigClient(ctx, bootstrapOpts.AuthConfigs)
 	Expect(err).NotTo(HaveOccurred())
@@ -454,6 +465,7 @@ func getTestClients(ctx context.Context, bootstrapOpts bootstrap.Opts) TestClien
 		HttpGatewayClient:    httpGatewayClient,
 		TcpGatewayClient:     tcpGatewayClient,
 		VirtualServiceClient: virtualServiceClient,
+		RouteTableClient:     routeTableClient,
 		UpstreamClient:       upstreamClient,
 		SecretClient:         secretClient,
 		ArtifactClient:       artifactClient,
@@ -472,6 +484,7 @@ type TestClients struct {
 	HttpGatewayClient    gatewayv1.MatchableHttpGatewayClient
 	TcpGatewayClient     gatewayv1.MatchableTcpGatewayClient
 	VirtualServiceClient gatewayv1.VirtualServiceClient
+	RouteTableClient     gatewayv1.RouteTableClient
 	ProxyClient          gloov1.ProxyClient
 	UpstreamClient       gloov1.UpstreamClient
 	SecretClient         gloov1.SecretClient
@@ -522,6 +535,11 @@ func (c TestClients) WriteSnapshot(ctx context.Context, snapshot *gloosnapshot.A
 	}
 	for _, gql := range snapshot.GraphqlApis {
 		if _, writeErr := c.GraphQLApiClient.Write(gql, writeOptions); writeErr != nil {
+			return writeErr
+		}
+	}
+	for _, rt := range snapshot.RouteTables {
+		if _, writeErr := c.RouteTableClient.Write(rt, writeOptions); writeErr != nil {
 			return writeErr
 		}
 	}
@@ -585,6 +603,12 @@ func (c TestClients) DeleteSnapshot(ctx context.Context, snapshot *gloosnapshot.
 	for _, vs := range snapshot.VirtualServices {
 		vsNamespace, vsName := vs.GetMetadata().Ref().Strings()
 		if deleteErr := c.VirtualServiceClient.Delete(vsNamespace, vsName, deleteOptions); deleteErr != nil {
+			return deleteErr
+		}
+	}
+	for _, rt := range snapshot.RouteTables {
+		rtNamespace, rtName := rt.GetMetadata().Ref().Strings()
+		if deleteErr := c.RouteTableClient.Delete(rtNamespace, rtName, deleteOptions); deleteErr != nil {
 			return deleteErr
 		}
 	}

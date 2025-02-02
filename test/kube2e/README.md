@@ -1,4 +1,11 @@
+> [!NOTE]
+> This directory houses legacy tests. All new tests should instead be added to the `test/kubernetes/e2e` directory.
+
 # Kubernetes End-to-End tests
+
+> These are our legacy Kubernetes E2E tests. We are migrating them to `../kubernetes/e2e`. Create new E2E tests there
+> using the new framework.
+
 See the [developer kube-e2e testing guide](/devel/testing/kube-e2e-tests.md) for more information about the philosophy of these tests.
 
 *Note: All commands should be run from the root directory of the Gloo repository*
@@ -30,18 +37,17 @@ For these tests to run, we require the following conditions:
 [ci/kind/setup-kind.sh](/ci/kind/setup-kind.sh) gets run in CI to setup the test environment for the above requirements.
 It accepts a number of environment variables, to control the creation of a kind cluster and deployment of Gloo resources to that kind cluster.
 
-| Name                 | Default  | Description                                                                                                         |
-|----------------------|----------|---------------------------------------------------------------------------------------------------------------------|
-| CLUSTER_NAME         | kind     | The name of the cluster that will be generated                                                                      |
-| CLUSTER_NODE_VERSION | v1.25.3  | The version of the [Node Docker image](https://hub.docker.com/r/kindest/node/) to use for booting the cluster       |
-| VERSION              | 1.0.0-ci | The version used to tag Gloo images that are deployed to the cluster                                                |
-| KUBE2E_TESTS         | gateway  | Name of the test suite to be run. Options: `'gateway', 'gloo', 'ingress', 'helm', 'gloomtls', 'glooctl', 'upgrade'` |
-| SKIP_DOCKER          | false    | Skip building docker images (used when testing a release version)                                                   |
-| RELEASED_VERSION     | ''       | Used if you want to test a previously released version. 'LATEST' will find the latest release                       |
+| Name                 | Default   | Description                                                                                                                  |
+|----------------------|-----------|------------------------------------------------------------------------------------------------------------------------------|
+| CLUSTER_NAME         | kind      | The name of the cluster that will be generated                                                                               |
+| CLUSTER_NODE_VERSION | v1.28.0   | The version of the [Node Docker image](https://hub.docker.com/r/kindest/node/) to use for booting the cluster                |
+| VERSION              | 1.0.0-ci1 | The version used to tag Gloo images that are deployed to the cluster                                                         |
+| SKIP_DOCKER          | false     | Skip building docker images (used when testing a release version)                                                            |
+| RELEASED_VERSION     | ''        | Used if you want to test a previously released version. 'LATEST' will find the latest release                                |
 
 Example:
 ```bash
-CLUSTER_NAME=solo-test-cluster CLUSTER_NODE_VERSION=v1.25.3 VERSION=v1.0.0-solo-test ci/kind/setup-kind.sh
+CLUSTER_NAME=solo-test-cluster CLUSTER_NODE_VERSION=v1.28.0 VERSION=v1.0.0-solo-test ci/kind/setup-kind.sh
 ```
 
 #### Verify Your Setup
@@ -66,7 +72,7 @@ To run the regression tests, your kubeconfig file must point to a running Kubern
 
 Use the same command that CI relies on:
 ```bash
-KUBE2E_TESTS=<test-to-run> make run-kube-e2e-tests
+CLUSTER_NAME=solo-test-cluster KUBE2E_TESTS=<test-to-run> make run-kube-e2e-tests
 ```
 
 #### Test Environment Variables
@@ -74,11 +80,12 @@ The below table contains the environment variables that can be used to configure
 
 | Name             | Default | Description                                                                                                                                                                                                                                        |
 |------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| KUBE2E_TESTS     | gateway | Name of the test suite to be run. Options: `'gateway', 'gloo', 'ingress', 'helm', 'gloomtls', 'glooctl', 'upgrade'`                                                                                                                                |
+| KUBE2E_TESTS     | gateway | Name of the test suite to be run. Options: `'gateway', 'gloo', 'ingress', 'helm', 'glooctl', 'upgrade', 'istio'`                                                                                                                                   |
 | DEBUG            | 0       | Set to 1 for debug log output                                                                                                                                                                                                                      |
 | WAIT_ON_FAIL     | 0       | Set to 1 to prevent Ginkgo from cleaning up the Gloo Edge installation in case of failure. Useful to exec into inspect resources created by the test. A command to resume the test run (and thus clean up resources) will be logged to the output. |
 | TEAR_DOWN        | false   | Set to true to uninstall Gloo after the test suite completes                                                                                                                                                                                       |
 | RELEASED_VERSION | ''      | Used by nightlies to tests a specific released version. 'LATEST' will find the latest release                                                                                                                                                      |
+| CLUSTER_NAME     | kind    | Used to control which Kind cluster to run the tests inside | 
 
 #### Common Test Errors
 `getting Helm chart version: expected a single entry with name [gloo], found: 5`\

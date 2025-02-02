@@ -1,0 +1,41 @@
+name: Run Conformance Tests
+
+on:
+  # TODO: Trigger on release events too.
+  workflow_dispatch:
+    inputs:
+      image-variant:
+        description: "The image variant to use."
+        required: true
+        type: choice
+        options:
+          - standard
+          - distroless
+      version:
+        description: "Optional: Specify an existing kgateway release tag to deploy and test. Leave empty to use the default branch."
+        required: false
+        type: string
+
+jobs:
+  run-conformance-tests:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        # TODO(tim): Avoid hardcoding versions here. It's a bit tricky based on
+        # how this was setup and there's a limited # of dispatch inputs that GH
+        # supports. We can revisit this later.
+        kube-version:
+        - node: 'v1.31.0@sha256:53df588e04085fd41ae12de0c3fe4c72f7013bba32a20e7325357a1ac94ba865'
+          kubectl: 'v1.31.0'
+          kind: 'v0.24.0'
+          helm: 'v3.14.4'
+        image-variant:
+          - ${{ inputs.image-variant }}
+        version:
+          - ${{ inputs.version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Conformance Tests
+        uses: ./.github/actions/kube-gateway-api-conformance-tests

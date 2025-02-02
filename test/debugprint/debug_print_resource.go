@@ -1,3 +1,5 @@
+//go:build ignore
+
 package debugprint
 
 import (
@@ -7,10 +9,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/onsi/ginkgo/v2"
-	"github.com/solo-io/gloo/pkg/utils/protoutils"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients/kube/crd"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 	"sigs.k8s.io/yaml"
+
+	"github.com/kgateway-dev/kgateway/pkg/utils/protoutils"
 )
 
 func PrintYaml(ress ...proto.Message) {
@@ -36,16 +39,16 @@ func PrintKube(crd crd.Crd, ress ...resources.InputResource) error {
 	return nil
 }
 
-func PrintAny(any ...interface{}) {
-	for _, res := range any {
+func PrintAny(anyVals ...interface{}) {
+	for _, res := range anyVals {
 		yam, _ := yaml.Marshal(res)
 		log.Printf("%s", yam)
 	}
 }
 
-func SprintAny(any ...interface{}) string {
+func SprintAny(anyVals ...interface{}) string {
 	var yams []string
-	for _, res := range any {
+	for _, res := range anyVals {
 		yam, _ := yaml.Marshal(res)
 		yams = append(yams, string(yam))
 	}

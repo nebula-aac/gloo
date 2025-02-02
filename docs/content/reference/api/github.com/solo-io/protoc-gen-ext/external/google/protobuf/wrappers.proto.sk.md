@@ -1,6 +1,6 @@
 
 ---
-title: "wrappers.proto"
+title: "Wrappers"
 weight: 5
 ---
 
@@ -42,9 +42,14 @@ for embedding primitives in the `google.protobuf.Any` type and for places
 where we need to distinguish between the absence of a primitive
 typed field and its default value.
 
+These wrappers have no meaningful use within repeated fields as they lack
+the ability to detect presence on individual elements.
+These wrappers have no meaningful use within a map or a oneof since
+individual entries of a map or fields of a oneof can already detect presence.
+
 
  
-#### Types:
+**Types:**
 
 
 - [DoubleValue](#doublevalue)
@@ -60,7 +65,7 @@ typed field and its default value.
 
 
 
-##### Source File: [github.com/solo-io/protoc-gen-ext/external/google/protobuf/wrappers.proto](https://github.com/solo-io/protoc-gen-ext/blob/main/external/google/protobuf/wrappers.proto)
+**Source File: [github.com/solo-io/protoc-gen-ext/external/google/protobuf/wrappers.proto](https://github.com/solo-io/protoc-gen-ext/blob/main/external/google/protobuf/wrappers.proto)**
 
 
 

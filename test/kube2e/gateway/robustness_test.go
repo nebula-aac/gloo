@@ -1,3 +1,5 @@
+//go:build ignore
+
 package gateway_test
 
 import (
@@ -11,43 +13,46 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/solo-io/gloo/projects/gateway/pkg/defaults"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
 
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/gloosnapshot"
+	"github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
 
-	gloostatusutils "github.com/solo-io/gloo/pkg/utils/statusutils"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/gloosnapshot"
+
+	gloostatusutils "github.com/kgateway-dev/kgateway/pkg/utils/statusutils"
 
 	"github.com/rotisserie/eris"
 
-	"github.com/solo-io/gloo/projects/gateway/pkg/services/k8sadmission"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/core/matchers"
-	"github.com/solo-io/gloo/test/helpers"
-	"github.com/solo-io/gloo/test/kube2e"
+	"github.com/kgateway-dev/kgateway/projects/gateway/pkg/services/k8sadmission"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/core/matchers"
+	"github.com/kgateway-dev/kgateway/test/helpers"
+	"github.com/kgateway-dev/kgateway/test/kube2e"
 
 	testutils "github.com/solo-io/k8s-utils/testutils/kube"
 
-	"github.com/solo-io/k8s-utils/testutils/helper"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
+
+	"github.com/kgateway-dev/kgateway/test/kube2e/helper"
 
 	"k8s.io/apimachinery/pkg/labels"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gatewayv1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
+	gatewayv1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
 )
 
 var _ = Describe("Robustness tests", func() {
 
 	// These tests are used to validate our Endpoint Discovery Service (EDS) functionality
-	// Historically, we had an EDS Test Suite (https://github.com/solo-io/gloo/tree/197272444efae0e6649c798997d6efa94bb7a8d9/test/kube2e/eds)
+	// Historically, we had an EDS Test Suite (https://github.com/kgateway-dev/kgateway/tree/197272444efae0e6649c798997d6efa94bb7a8d9/test/kube2e/eds)
 	// however, those tests often flaked, and the purpose of those tests was to validate what these
 	// tests already do: that endpoints are updated and sent to Envoy successfully.
 	// Therefore, we opted to collapse that Test Suite into this file. If in the future there are a larger set
@@ -242,7 +247,7 @@ var _ = Describe("Robustness tests", func() {
 			Eventually(func() []string {
 				initialEndpointIPs = endpointIPsForKubeService(resourceClientset.KubeClients(), appService)
 				return initialEndpointIPs
-			}, 20*time.Second, 1*time.Second).Should(Not(HaveLen(0)))
+			}, 20*time.Second, 1*time.Second).ShouldNot(BeEmpty())
 
 			By("force an update of the service endpoints")
 			scaleDeploymentTo(resourceClientset.KubeClients(), appDeployment, 0)
@@ -324,6 +329,16 @@ var _ = Describe("Robustness tests", func() {
 				}, "15s", "0.5s").Should(BeTrue())
 			})
 
+			// See helper.CurlOpts.Retries for explanation about why retries are useful
+			withBasicRetries := func(opts helper.CurlOpts) helper.CurlOpts {
+				opts.Retries = struct {
+					Retry        int
+					RetryDelay   int
+					RetryMaxTime int
+				}{Retry: 3, RetryDelay: 0, RetryMaxTime: 5}
+				return opts
+			}
+
 			firstRouteCurlOpts := func() helper.CurlOpts {
 				return helper.CurlOpts{
 					Protocol:          "http",
@@ -366,7 +381,7 @@ var _ = Describe("Robustness tests", func() {
 						return testHelper.Curl(firstRouteCurlOpts())
 					}, "30s", "1s").Should(ContainSubstring(validRouteResponse))
 					g.Consistently(func() (string, error) {
-						return testHelper.Curl(firstRouteCurlOpts())
+						return testHelper.Curl(withBasicRetries(firstRouteCurlOpts()))
 					}, "5s", "1s").Should(ContainSubstring(validRouteResponse))
 
 					// can no longer route to appName2 since its k8s service has been removed
@@ -377,10 +392,10 @@ var _ = Describe("Robustness tests", func() {
 						return testHelper.Curl(secondRouteCurlOpts())
 					}, "30s", "1s").Should(ContainSubstring(invalidRouteResponse))
 					g.Consistently(func() (string, error) {
-						return testHelper.Curl(secondRouteCurlOpts())
+						return testHelper.Curl(withBasicRetries(secondRouteCurlOpts()))
 					}, "5s", "1s").Should(ContainSubstring(invalidRouteResponse))
 
-				}, "30s")
+				}, "30s").Should(Succeed())
 			}
 
 			It("works", func() {

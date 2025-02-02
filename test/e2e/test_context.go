@@ -1,28 +1,31 @@
+//go:build ignore
+
 package e2e
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/solo-io/gloo/test/services/envoy"
+	"github.com/kgateway-dev/kgateway/test/services/envoy"
 
-	"github.com/solo-io/gloo/test/testutils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
 	"github.com/onsi/ginkgo/v2"
 
 	. "github.com/onsi/gomega"
-	v1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	gatewaydefaults "github.com/solo-io/gloo/projects/gateway/pkg/defaults"
-	gloov1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
-	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/gloosnapshot"
-	"github.com/solo-io/gloo/projects/gloo/pkg/defaults"
-	"github.com/solo-io/gloo/test/helpers"
-	"github.com/solo-io/gloo/test/services"
-	"github.com/solo-io/gloo/test/v1helpers"
 	"github.com/solo-io/solo-kit/pkg/api/v1/clients"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources"
+
+	v1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	gatewaydefaults "github.com/kgateway-dev/kgateway/projects/gateway/pkg/defaults"
+	gloov1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1/gloosnapshot"
+	"github.com/kgateway-dev/kgateway/projects/gloo/pkg/defaults"
+	"github.com/kgateway-dev/kgateway/test/helpers"
+	"github.com/kgateway-dev/kgateway/test/services"
+	"github.com/kgateway-dev/kgateway/test/v1helpers"
 )
 
 const (
@@ -36,7 +39,7 @@ const (
 	// To make our tests more explicit we define VirtualServices with an explicit set
 	// of domains (which match the `Host` header of a request), and DefaultHost
 	// is the domain we use by default
-	DefaultHost = "test.com"
+	DefaultHost = "jsonplaceholder.typicode.com"
 )
 
 var (
@@ -141,6 +144,9 @@ func (c *TestContext) AfterEach() {
 	ginkgo.By("TestContext.AfterEach: Cancelling test context")
 	// All services connected to the TestContext are tied to the context, so cancelling it will clean those up
 	c.cancel()
+	// This line prevents the process to quit before the envoy docker process is killed when running
+	// Focused Tests
+	Eventually(services.ContainerExistsWithName, "30s", "2s").WithArguments(c.envoyInstance.DockerContainerName).Should(BeEmpty())
 }
 
 func (c *TestContext) JustBeforeEach() {

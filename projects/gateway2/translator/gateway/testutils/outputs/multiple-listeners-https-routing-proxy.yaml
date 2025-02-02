@@ -1,0 +1,7 @@
+Listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8443
+  name: https-httpbin~https-bookinfo

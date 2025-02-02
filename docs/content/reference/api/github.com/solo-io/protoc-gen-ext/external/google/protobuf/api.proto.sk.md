@@ -1,6 +1,6 @@
 
 ---
-title: "api.proto"
+title: "Api"
 weight: 5
 ---
 
@@ -40,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
  
-#### Types:
+**Types:**
 
 
 - [Api](#api)
@@ -50,7 +50,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-##### Source File: [github.com/solo-io/protoc-gen-ext/external/google/protobuf/api.proto](https://github.com/solo-io/protoc-gen-ext/blob/main/external/google/protobuf/api.proto)
+**Source File: [github.com/solo-io/protoc-gen-ext/external/google/protobuf/api.proto](https://github.com/solo-io/protoc-gen-ext/blob/main/external/google/protobuf/api.proto)**
 
 
 
@@ -175,7 +175,7 @@ Example of a mixin configuration:
 The mixin construct implies that all methods in `AccessControl` are
 also declared with same name and request/response types in
 `Storage`. A documentation generator or annotation processor will
-see the effective `Storage.GetAcl` method after inherting
+see the effective `Storage.GetAcl` method after inheriting
 documentation and annotations as follows:
 
     service Storage {

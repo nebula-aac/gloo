@@ -1,10 +1,10 @@
 ---
-title: Envoy Wasm filters with Gloo Edge
+title: Envoy Wasm filters with Gloo Gateway
 weight: 70
-description: Using Wasm filters in Envoy with Gloo Edge
+description: Using Wasm filters in Envoy with Gloo Gateway
 ---
 
-You can use WebAssembly (Wasm) Envoy filters with Gloo Edge Enterprise. [WebAssembly](https://webassembly.org/) (Wasm) is an open standard, binary instruction format to enable high-performing web apps, for use cases such as customizing the endpoints and thresholds of your workloads.
+You can use WebAssembly (Wasm) Envoy filters with Gloo Gateway Enterprise. [WebAssembly](https://webassembly.org/) (Wasm) is an open standard, binary instruction format to enable high-performing web apps, for use cases such as customizing the endpoints and thresholds of your workloads.
 
 {{% notice note %}}
 The [upstream Envoy Wasm filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/wasm_filter) is experimental, and not yet recommended for production usage.
@@ -13,43 +13,31 @@ The [upstream Envoy Wasm filter](https://www.envoyproxy.io/docs/envoy/latest/con
 ## Before you begin
 
 1. [Create your environment]({{< versioned_link_path fromRoot="/installation/platform_configuration/" >}}), such as a Kubernetes cluster in a cloud provider.
-2. [Install Gloo Edge Enterprise]({{< versioned_link_path fromRoot="/installation/enterprise/" >}}) in your environment.
+2. [Install Gloo Gateway Enterprise]({{< versioned_link_path fromRoot="/installation/enterprise/" >}}) in your environment.
 3. Install a test app such as Pet Store from the [Hello World tutorial]({{< versioned_link_path fromRoot="/guides/traffic_management/hello_world/" >}}).
 
 ## Prepare your Wasm filter {#filter}
 
 WebAssembly provides a safe, secure, and dynamic way of extending infrastructure with the programming language of your choice.
 
-1. Get a Wasm image. Review the following resources to help.
-   * [WebAssembly Hub](https://webassemblyhub.io/repositories/) to use an existing Wasm image repository.
-   * [WebAssembly Developer's Guide](https://webassembly.org/getting-started/developers-guide/) for more information on building your own Wasm image.
-   * [Solo's `wasme` CLI tool](https://docs.solo.io/web-assembly-hub/latest/tutorial_code/getting_started/) with starter kits that makes it easy to build and push Wasm modules to WebAssembly Hub.
+1. Get a Wasm image. For more information on building your own Wasm image, see the [WebAssembly Developer's Guide](https://webassembly.org/getting-started/developers-guide/). 
 
-   Example steps with `wasme` CLI: For more information, see the [Build tutorial](https://docs.solo.io/web-assembly-hub/latest/tutorial_code/build_tutorials/building_cpp_filters/).
-   1. Start a C++ filter for Gloo.
-      ```sh
-      wasme init --language cpp --platform gloo --platform-version 1.13.x ./my-filter
-      ```
-   2. Build the filter into a Wasm image.
-      ```sh
-      cd my-filter
-      wasme build cpp --store ./wasmstore . -t my-wasm-filter:v1.0
-      ```
+2. Prepare your Wasm image for use with Gloo Gateway Enterprise. Review the following options.
 
-2. Prepare your Wasm image for use with Gloo Edge Enterprise. Review the following options.
-   * **Store in an image repository like WebAssembly Hub**: Solo provides [WebAssembly Hub](https://webassemblyhub.io/) as the simplest way to share and consume Wasm Envoy repositories. When you use the `wasme` CLI tool, you can push the image directly to your WebAssembly Hub repository. The resulting image repository is in a format similar to the following: `webassemblyhub.io/<username>/<filter-name>:<tag>`.
-   * **Load the Wasm file directly into the filter**: If your filter is not hosted in an image repository such as WebAssembly Hub, you can refer to the filepath directly, such as `<directory>/<filter-name>.wasm`.
-   * **Use an init container**: In some circumstances, you might not be able to use an image repository due to enterprise networking restrictions. Instead, you can use an `initContainer` on the Gloo Edge `gatewayProxy` deployment to load a `.wasm` file into a shared `volume`.
+   * Store in an OCI-compliant image repository. This guide uses an example Wasm image from Solo's public Google Container Registry.
+   * Load the Wasm file directly into the filter. If your filter is not hosted in an image repository, you can refer to the filepath directly, such as `<directory>/<filter-name>.wasm`.
+   * Use an init container. In some circumstances, you might not be able to use an image repository due to enterprise networking restrictions. Instead, you can use an `initContainer` on the Gloo Gateway `gatewayProxy` deployment to load a `.wasm` file into a shared `volume`.
 
-## Configure Gloo Edge to use a Wasm filter {#configuration}
+## Configure Gloo Gateway to use a Wasm filter {#configuration}
 
-Now that Gloo Edge Enterprise is installed and you have your Wasm image, you are ready to configure Gloo Edge to use the Wasm filter. You add the filter to your gateway proxy configuration. For more information, check out the {{% protobuf name="wasm.options.gloo.solo.io.PluginSource" display="API docs"%}}.
+Now that Gloo Gateway Enterprise is installed and you have your Wasm image, you are ready to configure Gloo Gateway to use the Wasm filter. You add the filter to your gateway proxy configuration. For more information, check out the {{% protobuf name="wasm.options.gloo.solo.io.PluginSource" display="API docs"%}}.
 
 {{< tabs >}} 
-{{% tab name="From WebAssembly Hub" %}}
+{{% tab name="From an image registry" %}}
 1. Get the configuration for your `gateway-proxy` gateway.
    ```shell
    kubectl get -n gloo-system gateways.gateway.solo.io gateway-proxy -o yaml > gateway-proxy.yaml
+   open gateway-proxy.yaml
    ```
 2. Add the reference to your Wasm filter in the `httpGateway` section as follows.
    ```yaml
@@ -60,7 +48,7 @@ Now that Gloo Edge Enterprise is installed and you have your Wasm image, you are
            - config:
                '@type': type.googleapis.com/google.protobuf.StringValue
                value: "world"
-             image: webassemblyhub.io/yuval/add-header:v0.1
+             image: gcr.io/solo-public/docs/assemblyscript-test:istio-1.8
              name: add-header
              rootId: add_header
    ```
@@ -241,9 +229,3 @@ Now that your `gateway-proxy` gateway is updated, the hard work has been done. A
    < 
    [{"id":1,"name":"Dog","status":"available"},{"id":2,"name":"Cat","status":"pending"}]
    {{< /highlight >}}
-
-## References
-
-* [WebAssembly Hub](https://webassemblyhub.io/) for sharing and reusing Wasm filters.
-* [Solo's `wasme` CLI tool](https://docs.solo.io/web-assembly-hub/latest/installation/) for building and deploying Wasm filters for Gloo Edge Enterprise, Istio, and Envoy.
-* [Solo's `wasm` GitHub repo](https://github.com/solo-io/wasm) for the `wasme` tool.

@@ -1,6 +1,6 @@
 
 ---
-title: "http_gateway.proto"
+title: "HttpGateway"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gateway.solo.io` 
-#### Types:
+**Types:**
 
 
 - [HttpGateway](#httpgateway)
@@ -19,7 +19,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gateway/api/v1/http_gateway.proto](https://github.com/solo-io/gloo/blob/main/projects/gateway/api/v1/http_gateway.proto)
+**Source File: [github.com/solo-io/gloo/projects/gateway/api/v1/http_gateway.proto](https://github.com/solo-io/gloo/blob/main/projects/gateway/api/v1/http_gateway.proto)**
 
 
 
@@ -45,7 +45,7 @@ weight: 5
 | `virtualServiceSelector` | `map<string, string>` | Select virtual services by their label. If `virtual_service_namespaces` is provided below, this will apply only to virtual services in the namespaces specified. Only one of `virtualServices`, `virtualServiceExpressions` or `virtualServiceSelector` should be provided. If more than one is provided only one will be checked with priority virtualServiceExpressions, virtualServiceSelector, virtualServices. |
 | `virtualServiceExpressions` | [.gateway.solo.io.VirtualServiceSelectorExpressions](../http_gateway.proto.sk/#virtualserviceselectorexpressions) | Select virtual services using expressions. If `virtual_service_namespaces` is provided below, this will apply only to virtual services in the namespaces specified. Only one of `virtualServices`, `virtualServiceExpressions` or `virtualServiceSelector` should be provided. If more than one is provided only one will be checked with priority virtualServiceExpressions, virtualServiceSelector, virtualServices. |
 | `virtualServiceNamespaces` | `[]string` | Restrict the search by providing a list of valid search namespaces here. Setting '*' will search all namespaces, equivalent to omitting this value. |
-| `options` | [.gloo.solo.io.HttpListenerOptions](../../../../gloo/api/v1/options.proto.sk/#httplisteneroptions) | HTTP Gateway configuration. |
+| `options` | [.gloo.solo.io.HttpListenerOptions](../../../../gloo/api/v1/http_listener_options.proto.sk/#httplisteneroptions) | HTTP Gateway configuration. |
 
 
 

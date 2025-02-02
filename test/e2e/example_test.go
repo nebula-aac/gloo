@@ -1,18 +1,22 @@
+//go:build ignore
+
 package e2e_test
 
 import (
 	"fmt"
 	"net/http"
 
-	"github.com/solo-io/gloo/test/testutils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
 
-	"github.com/solo-io/gloo/test/gomega/matchers"
+	"github.com/kgateway-dev/kgateway/test/gomega/matchers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "github.com/solo-io/gloo/projects/gateway/pkg/api/v1"
-	"github.com/solo-io/gloo/test/e2e"
-	"github.com/solo-io/gloo/test/helpers"
+
+	v1 "github.com/kgateway-dev/kgateway/projects/gateway/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/e2e"
+	"github.com/kgateway-dev/kgateway/test/helpers"
+	"github.com/kgateway-dev/kgateway/test/v1helpers"
 )
 
 var _ = Describe("Example E2E Test For Developers", Label(), func() {
@@ -22,6 +26,8 @@ var _ = Describe("Example E2E Test For Developers", Label(), func() {
 
 	var (
 		testContext *e2e.TestContext
+
+		testPath = "test"
 	)
 
 	BeforeEach(func() {
@@ -138,7 +144,7 @@ var _ = Describe("Example E2E Test For Developers", Label(), func() {
 	Context("Modifying resources directly in a test", func() {
 
 		It("can route traffic", func() {
-			requestBuilder := testContext.GetHttpRequestBuilder().WithPath("test")
+			requestBuilder := testContext.GetHttpRequestBuilder().WithPath(testPath)
 
 			Eventually(func(g Gomega) {
 				g.Expect(testutils.DefaultHttpClient.Do(requestBuilder.Build())).Should(matchers.HaveOkResponse())
@@ -164,4 +170,67 @@ var _ = Describe("Example E2E Test For Developers", Label(), func() {
 
 	})
 
+	Context("Using httpbin upstream generator to test", func() {
+		type HeadersResponse struct {
+			Headers map[string]interface{} `json:"headers"`
+		}
+
+		BeforeEach(func() {
+			testContext = testContextFactory.NewTestContext()
+			testContext.SetUpstreamGenerator(v1helpers.NewTestHttpUpstreamWithHttpbin)
+			testContext.BeforeEach()
+		})
+
+		It("Gets reflected headers from /headers route", func() {
+			Eventually(func(g Gomega) {
+				requestBuilder := testContext.GetHttpRequestBuilder().
+					WithPath("headers").
+					WithHeader("X-Test-Header", "test-value").
+					Build()
+
+				response, err := testutils.DefaultHttpClient.Do(requestBuilder)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				expectedJsonBody := []byte(`{"headers":{"X-Test-Header":["test-value"]}}`)
+				g.Expect(response).Should(matchers.HaveOKResponseWithJSONContains(expectedJsonBody))
+			}, "5s", ".5s").Should(Succeed(), "traffic to /headers eventually returns a 200 with the test header")
+		})
+	})
+
+	Context("Using handler upstream generator to test", func() {
+		BeforeEach(func() {
+			counter := 0
+			mux := http.NewServeMux()
+			mux.HandleFunc("/test", func(writer http.ResponseWriter, request *http.Request) {
+				counter++
+				_, err := writer.Write([]byte(fmt.Sprintf("request number %d", counter)))
+				if err != nil {
+					writer.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				writer.WriteHeader(http.StatusOK)
+			})
+
+			testContext = testContextFactory.NewTestContext()
+			testContext.SetUpstreamGenerator(v1helpers.NewTestHttpUpstreamWithHandler(mux))
+			testContext.BeforeEach()
+		})
+
+		It("Can count using custom handler", func() {
+			Eventually(func(g Gomega) {
+				requestBuilder := testContext.GetHttpRequestBuilder().
+					WithPath(testPath).
+					Build()
+
+				response, err := testutils.DefaultHttpClient.Do(requestBuilder)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				g.Expect(response).Should(matchers.HaveHttpResponse(&matchers.HttpResponse{
+					StatusCode: http.StatusOK,
+					Body:       "request number 2",
+				}))
+			}, "5s", ".5s").Should(Succeed(), fmt.Sprintf("traffic to /%s eventually returns a 200 with the correct response body", testPath))
+		})
+	})
 })

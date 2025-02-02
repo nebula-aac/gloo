@@ -1,6 +1,6 @@
 
 ---
-title: "router.proto"
+title: "Router"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [Router](#router)
@@ -16,7 +16,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/router/router.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/router/router.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/router/router.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/router/router.proto)**
 
 
 
@@ -31,12 +31,14 @@ Maps to https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/ht
 
 ```yaml
 "suppressEnvoyHeaders": .google.protobuf.BoolValue
+"dynamicStats": .google.protobuf.BoolValue
 
 ```
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `suppressEnvoyHeaders` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Do not add any additional x-envoy- headers to requests or responses. This only affects the router filter generated x-envoy- headers, other Envoy filters and the HTTP connection manager may continue to set x-envoy- headers. |
+| `dynamicStats` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Whether dynamic stats should be enabled or disabled. If not set, or if set to true, dynamic stats will be enabled. Otherwise, if set to false, dynamic stats will be disabled. It is strongly recommended to leave this in the default state in production - it should only be set to false in very specific benchmarking or profiling scenarios. |
 
 
 

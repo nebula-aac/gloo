@@ -1,6 +1,6 @@
 
 ---
-title: "connection_limit.proto"
+title: "ConnectionLimit"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `connection_limit.options.gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [ConnectionLimit](#connectionlimit)
@@ -16,7 +16,7 @@ weight: 5
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/connection_limit/connection_limit.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/connection_limit/connection_limit.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/connection_limit/connection_limit.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/connection_limit/connection_limit.proto)**
 
 
 
@@ -37,7 +37,7 @@ Ref. https://www.envoyproxy.io/docs/envoy/latest/configuration/listeners/network
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
-| `maxActiveConnections` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | The maximum number of active connections for this gateway. When this limit is reached, any incoming connection will be closed after delay duration. Must be greater than one. |
+| `maxActiveConnections` | [.google.protobuf.UInt32Value](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/u-int-32-value) | The maximum number of active connections for this gateway. When this limit is reached, any incoming connection will be closed after delay duration. Must be greater than or equal to one. |
 | `delayBeforeClose` | [.google.protobuf.Duration](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/duration) | The time to wait before a connection is dropped. Useful for DoS prevention. Defaults to zero and the connection will be closed immediately. |
 
 

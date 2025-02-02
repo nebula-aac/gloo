@@ -1,6 +1,6 @@
 
 ---
-title: "transformation.proto"
+title: "Transformation"
 weight: 5
 ---
 
@@ -8,7 +8,7 @@ weight: 5
 
 
 ### Package: `transformation.options.gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [ResponseMatch](#responsematch)
@@ -18,19 +18,23 @@ weight: 5
 - [TransformationStages](#transformationstages)
 - [Transformation](#transformation)
 - [Extraction](#extraction)
+- [Mode](#mode)
 - [TransformationTemplate](#transformationtemplate)
 - [HeaderToAppend](#headertoappend)
 - [DynamicMetadataValue](#dynamicmetadatavalue)
+- [SpanTransformer](#spantransformer)
 - [RequestBodyParse](#requestbodyparse)
 - [InjaTemplate](#injatemplate)
 - [Passthrough](#passthrough)
 - [MergeExtractorsToBody](#mergeextractorstobody)
+- [MergeJsonKeys](#mergejsonkeys)
+- [OverridableTemplate](#overridabletemplate)
 - [HeaderBodyTransform](#headerbodytransform)
   
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/transformation/transformation.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/transformation/transformation.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/transformation/transformation.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/transformation/transformation.proto)**
 
 
 
@@ -128,6 +132,7 @@ weight: 5
 ```yaml
 "early": .transformation.options.gloo.solo.io.RequestResponseTransformations
 "regular": .transformation.options.gloo.solo.io.RequestResponseTransformations
+"postRouting": .transformation.options.gloo.solo.io.RequestResponseTransformations
 "inheritTransformation": bool
 "logRequestResponseInfo": .google.protobuf.BoolValue
 "escapeCharacters": .google.protobuf.BoolValue
@@ -138,6 +143,7 @@ weight: 5
 | ----- | ---- | ----------- | 
 | `early` | [.transformation.options.gloo.solo.io.RequestResponseTransformations](../transformation.proto.sk/#requestresponsetransformations) | Early transformations happen before most other options (Like Auth and Rate Limit). |
 | `regular` | [.transformation.options.gloo.solo.io.RequestResponseTransformations](../transformation.proto.sk/#requestresponsetransformations) | Regular transformations happen after Auth and Rate limit decisions has been made. |
+| `postRouting` | [.transformation.options.gloo.solo.io.RequestResponseTransformations](../transformation.proto.sk/#requestresponsetransformations) | Post routing transformations happen during the router filter chain. This is important for a number of reasons 1. Retries re-trigger this filter, which might impact performance. 2. It is the only point where endpoint metadata is available. 3. `clear_route_cache` does NOT work in this stage as the routing decision is already made. Enterprise only. |
 | `inheritTransformation` | `bool` | Inherit transformation config from parent. This has no affect on VirtualHost level transformations. If a RouteTable or Route wants to inherit transformations from it's parent RouteTable or VirtualHost, this should be set to true, else transformations from parents will not be inherited. Transformations are ordered so the child's transformation gets priority, so in the case where a child and parent's transformation matchers are the same, only the child's transformation will run because only one transformation will run per stage. Defaults to false. |
 | `logRequestResponseInfo` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | When enabled, log request/response body and headers before and after all transformations defined here are applied.\ This overrides the log_request_response_info field in the Transformation message. |
 | `escapeCharacters` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Use this field to set Inja behavior when rendering strings which contain characters that would need to be escaped to be valid JSON. Note that this sets the behavior for all staged transformations configured here. This setting can be overridden per-transformation using the field `escape_characters` on the TransformationTemplate. |
@@ -163,7 +169,7 @@ User-facing API for transformation.
 | ----- | ---- | ----------- | 
 | `transformationTemplate` | [.transformation.options.gloo.solo.io.TransformationTemplate](../transformation.proto.sk/#transformationtemplate) | Apply transformation templates. Only one of `transformationTemplate`, `headerBodyTransform`, or `xsltTransformation` can be set. |
 | `headerBodyTransform` | [.transformation.options.gloo.solo.io.HeaderBodyTransform](../transformation.proto.sk/#headerbodytransform) | This type of transformation will make all the headers available in the response body. The resulting JSON body will consist of two attributes: 'headers', containing the headers, and 'body', containing the original body. Only one of `headerBodyTransform`, `transformationTemplate`, or `xsltTransformation` can be set. |
-| `xsltTransformation` | [.envoy.config.transformer.xslt.v2.XsltTransformation](../../../../external/envoy/extensions/transformers/xslt/xslt_transformer.proto.sk/#xslttransformation) | (Enterprise Only): Xslt Transformation. Only one of `xsltTransformation`, `transformationTemplate`, or `headerBodyTransform` can be set. |
+| `xsltTransformation` | .envoy.config.transformer.xslt.v2.XsltTransformation | (Enterprise Only): Xslt Transformation. Only one of `xsltTransformation`, `transformationTemplate`, or `headerBodyTransform` can be set. |
 | `logRequestResponseInfo` | `bool` | When enabled, log request/response body and headers before and after this transformation is applied. |
 
 
@@ -181,6 +187,8 @@ The extracted information can then be referenced in template fields.
 "body": .google.protobuf.Empty
 "regex": string
 "subgroup": int
+"replacementText": .google.protobuf.StringValue
+"mode": .transformation.options.gloo.solo.io.Extraction.Mode
 
 ```
 
@@ -188,8 +196,25 @@ The extracted information can then be referenced in template fields.
 | ----- | ---- | ----------- | 
 | `header` | `string` | Extract information from headers. Only one of `header` or `body` can be set. |
 | `body` | [.google.protobuf.Empty](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/empty) | Extract information from the request/response body. Only one of `body` or `header` can be set. |
-| `regex` | `string` | Only strings matching this regular expression will be part of the extraction. This regex **must match the entire source** in order for a value to be extracted. The most simple value for this field is '.*', which matches the whole source. The field is required. If extraction fails the result is an empty value. |
-| `subgroup` | `int` | If your regex contains capturing groups, use this field to determine which group should be selected. |
+| `regex` | `string` | The regex field specifies the regular expression used for matching against the source content. - In EXTRACT mode, the entire source must match the regex. `subgroup` selects the n-th capturing group, which determines the part of the match that you want to extract. If the regex does not match the source, the result of the extraction will be an empty value. - In SINGLE_REPLACE mode, the regex also needs to match the entire source. `subgroup` selects the n-th capturing group that is replaced with the content of `replacement_text`. If the regex does not match the source, the result of the replacement will be the source itself. - In REPLACE_ALL mode, the regex is applied repeatedly to find all occurrences within the source that match. Each matching occurrence is replaced with the value in `replacement_text`. In this mode, the configuration is rejected if `subgroup` is set. If the regex does not match the source, the result of the replacement will be the source itself. |
+| `subgroup` | `int` | If your regex contains capturing groups, use this field to determine the group that you want to select. Defaults to 0. If set in `EXTRACT` and `SINGLE_REPLACE` modes, the subgroup represents the capturing group that you want to extract or replace in the source. The configuration is rejected if you set subgroup to a non-zero value when using thev `REPLACE_ALL` mode. |
+| `replacementText` | [.google.protobuf.StringValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/string-value) | The value `replacement_text` is used to format the substitution for matched sequences in in an input string. This value is only legal in `SINGLE_REPLACE` and `REPLACE_ALL` modes. - In `SINGLE_REPLACE` mode, the `subgroup` selects the n-th capturing group, which represents the value that you want to replace with the string provided in `replacement_text`. - In `REPLACE_ALL` mode, each sequence that matches the specified regex in the input is replaced with the value in`replacement_text`. The `replacement_text` can include special syntax, such as $1, $2, etc., to refer to capturing groups within the regular expression. The value that is specified in `replacement_text` is treated as a string, and is passed to `std::regex_replace` as the replacement string. For more informatino, see https://en.cppreference.com/w/cpp/regex/regex_replace. |
+| `mode` | [.transformation.options.gloo.solo.io.Extraction.Mode](../transformation.proto.sk/#mode) | The mode of operation for the extraction. Defaults to EXTRACT. |
+
+
+
+
+---
+### Mode
+
+ 
+The mode of operation for the extraction.
+
+| Name | Description |
+| ----- | ----------- | 
+| `EXTRACT` | Default mode. Extract the content of a specified capturing group. In this mode, `subgroup` selects the n-th capturing group, which represents the value that you want to extract. |
+| `SINGLE_REPLACE` | Replace the content of a specified capturing group. In this mode, `subgroup` selects the n-th capturing group, which represents the value that you want to replace with the string provided in `replacement_text`. Note: `replacement_text` must be set for this mode. |
+| `REPLACE_ALL` | Replace all regex matches with the value provided in `replacement_text`. Note: `replacement_text` must be set for this mode. Note: The configuration fails if `subgroup` is set to a non-zero value. Note: restrictions on the regex are different for this mode. See the regex field for more details. |
 
 
 
@@ -209,10 +234,12 @@ Defines a transformation template.
 "body": .transformation.options.gloo.solo.io.InjaTemplate
 "passthrough": .transformation.options.gloo.solo.io.Passthrough
 "mergeExtractorsToBody": .transformation.options.gloo.solo.io.MergeExtractorsToBody
+"mergeJsonKeys": .transformation.options.gloo.solo.io.MergeJsonKeys
 "parseBodyBehavior": .transformation.options.gloo.solo.io.TransformationTemplate.RequestBodyParse
 "ignoreErrorOnParse": bool
 "dynamicMetadataValues": []transformation.options.gloo.solo.io.TransformationTemplate.DynamicMetadataValue
 "escapeCharacters": .google.protobuf.BoolValue
+"spanTransformer": .transformation.options.gloo.solo.io.TransformationTemplate.SpanTransformer
 
 ```
 
@@ -223,13 +250,15 @@ Defines a transformation template.
 | `headers` | `map<string, string>` | Use this attribute to transform request/response headers. It consists of a map of strings to templates. The string key determines the name of the resulting header, the rendered template will determine the value. Any existing headers with the same header name will be replaced by the transformed header. If a header name is included in `headers` and `headers_to_append`, it will first be replaced the template in `headers`, then additional header values will be appended by the templates defined in `headers_to_append`. For example, the following header transformation configuration: ```yaml headers: x-header-one: {"text": "first {{inja}} template"} x-header-one: {"text": "second {{inja}} template"} headersToAppend: - key: x-header-one value: {"text": "first appended {{inja}} template"} - key: x-header-one value: {"text": "second appended {{inja}} template"} ``` will result in the following headers on the HTTP message: ``` x-header-one: first inja template x-header-one: first appended inja template x-header-one: second appended inja template ```. |
 | `headersToAppend` | [[]transformation.options.gloo.solo.io.TransformationTemplate.HeaderToAppend](../transformation.proto.sk/#headertoappend) | Use this attribute to transform request/response headers. It consists of an array of string/template objects. Use this attribute to define multiple templates for a single header. Header template(s) defined here will be appended to any existing headers with the same header name, not replace existing ones. See `headers` documentation to see an example of usage. |
 | `headersToRemove` | `[]string` | Attribute to remove headers from requests. If a header is present multiple times, all instances of the header will be removed. |
-| `body` | [.transformation.options.gloo.solo.io.InjaTemplate](../transformation.proto.sk/#injatemplate) | Apply a template to the body. Only one of `body`, `passthrough`, or `mergeExtractorsToBody` can be set. |
-| `passthrough` | [.transformation.options.gloo.solo.io.Passthrough](../transformation.proto.sk/#passthrough) | This will cause the transformation filter not to buffer the body. Use this setting if the response body is large and you don't need to transform nor extract information from it. Only one of `passthrough`, `body`, or `mergeExtractorsToBody` can be set. |
-| `mergeExtractorsToBody` | [.transformation.options.gloo.solo.io.MergeExtractorsToBody](../transformation.proto.sk/#mergeextractorstobody) | Merge all defined extractors to the request/response body. If you want to nest elements inside the body, use dot separator in the extractor name. Only one of `mergeExtractorsToBody`, `body`, or `passthrough` can be set. |
+| `body` | [.transformation.options.gloo.solo.io.InjaTemplate](../transformation.proto.sk/#injatemplate) | Apply a template to the body. Only one of `body`, `passthrough`, `mergeExtractorsToBody`, or `mergeJsonKeys` can be set. |
+| `passthrough` | [.transformation.options.gloo.solo.io.Passthrough](../transformation.proto.sk/#passthrough) | This will cause the transformation filter not to buffer the body. Use this setting if the response body is large and you don't need to transform nor extract information from it. Only one of `passthrough`, `body`, `mergeExtractorsToBody`, or `mergeJsonKeys` can be set. |
+| `mergeExtractorsToBody` | [.transformation.options.gloo.solo.io.MergeExtractorsToBody](../transformation.proto.sk/#mergeextractorstobody) | Merge all defined extractors to the request/response body. If you want to nest elements inside the body, use dot separator in the extractor name. Only one of `mergeExtractorsToBody`, `body`, `passthrough`, or `mergeJsonKeys` can be set. |
+| `mergeJsonKeys` | [.transformation.options.gloo.solo.io.MergeJsonKeys](../transformation.proto.sk/#mergejsonkeys) | A set of key-value pairs to merge into the JSON body. Each value will be rendered separately, and then placed into the JSON body at the specified key. There are a number of important caveats to using this feature: * This can only be used when the body is parsed as JSON. * This option does NOT work with advanced templates currently. Only one of `mergeJsonKeys`, `body`, `passthrough`, or `mergeExtractorsToBody` can be set. |
 | `parseBodyBehavior` | [.transformation.options.gloo.solo.io.TransformationTemplate.RequestBodyParse](../transformation.proto.sk/#requestbodyparse) | Determines how the body will be parsed. Defaults to ParseAsJson. |
 | `ignoreErrorOnParse` | `bool` | If set to true, Envoy will not throw an exception in case the body parsing fails. |
 | `dynamicMetadataValues` | [[]transformation.options.gloo.solo.io.TransformationTemplate.DynamicMetadataValue](../transformation.proto.sk/#dynamicmetadatavalue) | Use this field to set Dynamic Metadata. |
 | `escapeCharacters` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Use this field to set Inja behavior when rendering strings which contain characters that would need to be escaped to be valid JSON. Note that this sets the behavior for the entire transformation. Use raw_strings function for fine-grained control within a template. |
+| `spanTransformer` | [.transformation.options.gloo.solo.io.TransformationTemplate.SpanTransformer](../transformation.proto.sk/#spantransformer) | Use this field to modify the span of the trace. This field can only be applied on requestTransformations. Attempting to set this on a responseTransformation will result in an error. |
 
 
 
@@ -266,6 +295,7 @@ entry.
 "metadataNamespace": string
 "key": string
 "value": .transformation.options.gloo.solo.io.InjaTemplate
+"jsonToProto": bool
 
 ```
 
@@ -274,6 +304,25 @@ entry.
 | `metadataNamespace` | `string` | The metadata namespace. Defaults to the filter namespace. |
 | `key` | `string` | The metadata key. |
 | `value` | [.transformation.options.gloo.solo.io.InjaTemplate](../transformation.proto.sk/#injatemplate) | A template that determines the metadata value. |
+| `jsonToProto` | `bool` | Instruct the filter to parse the rendered value as a proto Struct message before setting it as the metadata value. |
+
+
+
+
+---
+### SpanTransformer
+
+ 
+Definitions for span transformations for tracing purposes.
+
+```yaml
+"name": .transformation.options.gloo.solo.io.InjaTemplate
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `name` | [.transformation.options.gloo.solo.io.InjaTemplate](../transformation.proto.sk/#injatemplate) | A template that sets the span name. For example, to set the span name to the value of the host header, you can set this value to `'{{header("Host")}}'`. |
 
 
 
@@ -355,6 +404,42 @@ substring extends to the end of the input string.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
+
+
+
+
+---
+### MergeJsonKeys
+
+
+
+```yaml
+"jsonKeys": map<string, .transformation.options.gloo.solo.io.MergeJsonKeys.OverridableTemplate>
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `jsonKeys` | `map<string, .transformation.options.gloo.solo.io.MergeJsonKeys.OverridableTemplate>` | Map of key name -> template to render into the JSON body. Specified keys which don't exist in the JSON body will be set, keys which do exist will be overriden. For example, given the following JSON body: { "key1": "value1" } and the following MergeJsonKeys: { "key1": "{{ header("header1") }}", "key2": "{{ header("header2") }}" } The resulting JSON body will be: { "key1": "header1_value", "key2": "header2_value" }. |
+
+
+
+
+---
+### OverridableTemplate
+
+
+
+```yaml
+"tmpl": .transformation.options.gloo.solo.io.InjaTemplate
+"overrideEmpty": bool
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `tmpl` | [.transformation.options.gloo.solo.io.InjaTemplate](../transformation.proto.sk/#injatemplate) | Template to render. |
+| `overrideEmpty` | `bool` | If set to true, the template will be set even if the rendered value is empty. |
 
 
 

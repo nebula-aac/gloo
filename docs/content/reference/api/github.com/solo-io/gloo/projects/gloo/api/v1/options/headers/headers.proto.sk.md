@@ -1,6 +1,6 @@
 
 ---
-title: "headers.proto"
+title: "Headers"
 weight: 5
 ---
 
@@ -8,17 +8,18 @@ weight: 5
 
 
 ### Package: `headers.options.gloo.solo.io` 
-#### Types:
+**Types:**
 
 
 - [HeaderManipulation](#headermanipulation)
+- [EarlyHeaderManipulation](#earlyheadermanipulation)
 - [HeaderValueOption](#headervalueoption)
 - [HeaderValue](#headervalue)
   
 
 
 
-##### Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/headers/headers.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/headers/headers.proto)
+**Source File: [github.com/solo-io/gloo/projects/gloo/api/v1/options/headers/headers.proto](https://github.com/solo-io/gloo/blob/main/projects/gloo/api/v1/options/headers/headers.proto)**
 
 
 
@@ -51,6 +52,30 @@ HeaderManipulation can be specified on routes, virtual hosts, or weighted destin
 
 
 ---
+### EarlyHeaderManipulation
+
+ 
+EarlyHeaderManipulation can be specified on Gateways to manipulate headers before significant processing
+has happened and routing decisions are made.
+Early header manipulation allows adding/removing headers that affect request processing
+and can be used to implement override headers.
+Note: The adding of headers happens before the removal of headers.
+
+```yaml
+"headersToAdd": []solo.io.envoy.api.v2.core.HeaderValueOption
+"headersToRemove": []string
+
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- | 
+| `headersToAdd` | [[]solo.io.envoy.api.v2.core.HeaderValueOption](../../../../../../../../solo-kit/api/external/envoy/api/v2/core/base.proto.sk/#headervalueoption) | Specifies a list of HTTP headers that should be added to each request handled by this gateway. For more information, including details on header value syntax, see the [Envoy documentation](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers.html#) . |
+| `headersToRemove` | `[]string` | Specifies a list of HTTP headers that should be removed from each request handled by this gateway. |
+
+
+
+
+---
 ### HeaderValueOption
 
  
@@ -65,7 +90,7 @@ Header name/value pair plus option to control append behavior.
 | Field | Type | Description |
 | ----- | ---- | ----------- | 
 | `header` | [.headers.options.gloo.solo.io.HeaderValue](../headers.proto.sk/#headervalue) | Header name/value pair that this option applies to. |
-| `append` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Should the value be appended? If true (default), the value is appended to existing values. |
+| `append` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Specifies if the value should be appended or overwrite an existing header. Defaults to true. If set to true, this maps to Envoy's `append_value: APPEND_IF_EXISTS_OR_ADD`, where the value gets be appended the header's value(s) if exists, or created if it does not. If set to false, this maps to Envoy's `append_value: OVERWRITE_IF_EXISTS_OR_ADD`, where the header's value will be overwritten if it exists, or created if it does not. |
 
 
 

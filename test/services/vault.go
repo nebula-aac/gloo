@@ -1,3 +1,5 @@
+//go:build ignore
+
 package services
 
 import (
@@ -14,11 +16,12 @@ import (
 	errors "github.com/rotisserie/eris"
 
 	"github.com/onsi/gomega"
-	"github.com/solo-io/gloo/test/services/utils"
-	"github.com/solo-io/gloo/test/testutils"
 	"github.com/solo-io/solo-kit/pkg/utils/protoutils"
 
-	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
+	"github.com/kgateway-dev/kgateway/test/services/utils"
+	"github.com/kgateway-dev/kgateway/test/testutils"
+
+	v1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega/gexec"
@@ -28,9 +31,6 @@ const (
 	DefaultHost       = "127.0.0.1"
 	DefaultPort       = 8200
 	DefaultVaultToken = "root"
-
-	vaultDockerImage = "hashicorp/vault:1.13.3"
-	vaultBinaryName  = "vault"
 )
 
 type VaultFactory struct {
@@ -47,8 +47,8 @@ func NewVaultFactory() (*VaultFactory, error) {
 		return nil, err
 	}
 	binaryPath, err := utils.GetBinary(utils.GetBinaryParams{
-		Filename:    vaultBinaryName,
-		DockerImage: vaultDockerImage,
+		Filename:    testutils.VaultBinaryName,
+		DockerImage: testutils.VaultDockerImage,
 		DockerPath:  "/bin/vault",
 		EnvKey:      testutils.VaultBinary,
 		TmpDir:      tmpdir,
@@ -188,7 +188,30 @@ func (i *VaultInstance) EnableSecretEngine(secretEngine string) error {
 	return err
 }
 
-func (i *VaultInstance) EnableAWSAuthMethod(settings *v1.Settings_VaultSecrets, awsAuthRole string) error {
+func (i *VaultInstance) addAdminPolicy() error {
+	tmpFileName := filepath.Join(i.tmpdir, "policy.json")
+	err := os.WriteFile(tmpFileName, []byte(`{"path":{"*":{"capabilities":["create","read","update","delete","list","patch","sudo"]}}}`), 0666)
+	if err != nil {
+		return err
+	}
+	_, err = i.Exec("policy", "write", "admin", tmpFileName)
+	return err
+}
+
+func (i *VaultInstance) addAuthRole(awsAuthRole string, extraParams ...string) error {
+	command := append([]string{
+		"write",
+		"auth/aws/role/vault-role",
+		"auth_type=iam",
+		fmt.Sprintf("bound_iam_principal_arn=%s", awsAuthRole),
+		"policies=admin"},
+		extraParams...,
+	)
+	_, err := i.Exec(command...)
+	return err
+}
+
+func (i *VaultInstance) EnableAWSCredentialsAuthMethod(settings *v1.Settings_VaultSecrets, awsAuthRole string, extraAuthParams []string) error {
 	// Enable the AWS auth method
 	_, err := i.Exec("auth", "enable", "aws")
 	if err != nil {
@@ -196,12 +219,7 @@ func (i *VaultInstance) EnableAWSAuthMethod(settings *v1.Settings_VaultSecrets, 
 	}
 
 	// Add our admin policy
-	tmpFileName := filepath.Join(i.tmpdir, "policy.json")
-	err = os.WriteFile(tmpFileName, []byte(`{"path":{"*":{"capabilities":["create","read","update","delete","list","patch","sudo"]}}}`), 0666)
-	if err != nil {
-		return err
-	}
-	_, err = i.Exec("policy", "write", "admin", tmpFileName)
+	err = i.addAdminPolicy()
 	if err != nil {
 		return err
 	}
@@ -213,7 +231,36 @@ func (i *VaultInstance) EnableAWSAuthMethod(settings *v1.Settings_VaultSecrets, 
 	}
 
 	// Configure the Vault role to align with the provided AWS role
-	_, err = i.Exec("write", "auth/aws/role/vault-role", "auth_type=iam", fmt.Sprintf("bound_iam_principal_arn=%s", awsAuthRole), "policies=admin")
+	err = i.addAuthRole(awsAuthRole, extraAuthParams...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *VaultInstance) EnableAWSSTSAuthMethod(awsAuthRole, serverIdHeader, stsRegion string) error {
+	// Enable the AWS auth method
+	_, err := i.Exec("auth", "enable", "aws")
+	if err != nil {
+		return err
+	}
+
+	// Add our admin policy
+	err = i.addAdminPolicy()
+	if err != nil {
+		return err
+	}
+
+	// Configure the AWS auth method with the sts endpoint and server id header set
+	stsEndpoint := fmt.Sprintf("https://sts.%s.amazonaws.com", stsRegion)
+	_, err = i.Exec("write", "auth/aws/config/client", fmt.Sprintf("iam_server_id_header_value=%s", serverIdHeader), fmt.Sprintf("sts_endpoint=%s", stsEndpoint), fmt.Sprintf("sts_region=%s", stsRegion))
+	if err != nil {
+		return err
+	}
+
+	// Configure the Vault role to align with the provided AWS role
+	err = i.addAuthRole(awsAuthRole)
 	if err != nil {
 		return err
 	}
@@ -230,8 +277,12 @@ func (i *VaultInstance) WriteSecret(secret *v1.Secret) error {
 		WithPort(i.port).
 		WithHeader("X-Vault-Token", i.token)
 
-	_, err := testutils.DefaultHttpClient.Do(requestBuilder.Build())
-	return err
+	resp, err := testutils.DefaultHttpClient.Do(requestBuilder.Build())
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
 
 // getVaultSecretPayload converts a Gloo secret into a string representing the data that will be pushed to Vault

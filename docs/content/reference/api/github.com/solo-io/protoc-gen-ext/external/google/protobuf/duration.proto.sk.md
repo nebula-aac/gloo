@@ -1,6 +1,6 @@
 
 ---
-title: "duration.proto"
+title: "Duration"
 weight: 5
 ---
 
@@ -40,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
  
-#### Types:
+**Types:**
 
 
 - [Duration](#duration)
@@ -48,7 +48,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-##### Source File: [github.com/solo-io/protoc-gen-ext/external/google/protobuf/duration.proto](https://github.com/solo-io/protoc-gen-ext/blob/main/external/google/protobuf/duration.proto)
+**Source File: [github.com/solo-io/protoc-gen-ext/external/google/protobuf/duration.proto](https://github.com/solo-io/protoc-gen-ext/blob/main/external/google/protobuf/duration.proto)**
 
 
 
@@ -79,7 +79,7 @@ Example 1: Compute Duration from two Timestamps in pseudo code.
     if (duration.seconds < 0 && duration.nanos > 0) {
       duration.seconds += 1;
       duration.nanos -= 1000000000;
-    } else if (durations.seconds > 0 && duration.nanos < 0) {
+    } else if (duration.seconds > 0 && duration.nanos < 0) {
       duration.seconds -= 1;
       duration.nanos += 1000000000;
     }

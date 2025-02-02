@@ -6,18 +6,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # The name of the kind cluster to deploy to
 CLUSTER_NAME="${CLUSTER_NAME:-kind}"
 # The version of the Node Docker image to use for booting the cluster
-CLUSTER_NODE_VERSION="${CLUSTER_NODE_VERSION:-v1.26.4}"
+CLUSTER_NODE_VERSION="${CLUSTER_NODE_VERSION:-v1.31.0}"
 # The version used to tag images
-VERSION="${VERSION:-1.0.0-ci}"
+VERSION="${VERSION:-1.0.0-ci1}"
 # Skip building docker images if we are testing a released version
 SKIP_DOCKER="${SKIP_DOCKER:-false}"
 # Stop after creating the kind cluster
 JUST_KIND="${JUST_KIND:-false}"
-# Offer a default value for type of installation
-KUBE2E_TESTS="${KUBE2E_TESTS:-gateway}"  # If 'KUBE2E_TESTS' not set or null, use 'gateway'.
-# The version of istio to install for glooctl tests
-# https://istio.io/latest/docs/releases/supported-releases/#support-status-of-istio-releases
-ISTIO_VERSION="${ISTIO_VERSION:-1.17.1}"
+# Set the default image variant to standard
+IMAGE_VARIANT="${IMAGE_VARIANT:-standard}"
+# If true, run extra steps to set up k8s gateway api conformance test environment
+CONFORMANCE="${CONFORMANCE:-false}"
+# The version of the k8s gateway api conformance tests to run. Requires CONFORMANCE=true
+CONFORMANCE_VERSION="${CONFORMANCE_VERSION:-v1.2.0}"
+# The channel of the k8s gateway api conformance tests to run. Requires CONFORMANCE=true
+CONFORMANCE_CHANNEL="${CONFORMANCE_CHANNEL:-"experimental"}"
 
 function create_kind_cluster_or_skip() {
   activeClusters=$(kind get clusters)
@@ -47,27 +50,33 @@ function create_kind_cluster_or_skip() {
 create_kind_cluster_or_skip
 
 if [[ $SKIP_DOCKER == 'true' ]]; then
+  # TODO(tim): refactor the Makefile & CI scripts so we're loading local
+  # charts to real helm repos, and then we can remove this block.
   echo "SKIP_DOCKER=true, not building images or chart"
+  helm repo add gloo https://storage.googleapis.com/solo-public-helm
+  helm repo update
 else
   # 2. Make all the docker images and load them to the kind cluster
-  VERSION=$VERSION CLUSTER_NAME=$CLUSTER_NAME USE_SILENCE_REDIRECTS=true make -s kind-build-and-load
+  VERSION=$VERSION CLUSTER_NAME=$CLUSTER_NAME IMAGE_VARIANT=$IMAGE_VARIANT make kind-build-and-load
 
   # 3. Build the test helm chart, ensuring we have a chart in the `_test` folder
-  VERSION=$VERSION USE_SILENCE_REDIRECTS=true make -s build-test-chart
+  VERSION=$VERSION make package-kgateway-chart
 fi
 
 # 4. Build the gloo command line tool, ensuring we have one in the `_output` folder
-USE_SILENCE_REDIRECTS=true make -s build-cli-local
+# make -s build-cli-local
 
-# 5. Install additional resources used for particular KUBE2E tests
-if [[ $KUBE2E_TESTS = "glooctl" || $KUBE2E_TESTS = "istio" ]]; then
-  TARGET_ARCH=x86_64
-  if [[ $ARCH == 'arm64' ]]; then
-    TARGET_ARCH=arm64
-  fi
-  echo "Downloading Istio $ISTIO_VERSION"
-  curl -L https://istio.io/downloadIstio | ISTIO_VERSION=$ISTIO_VERSION TARGET_ARCH=$TARGET_ARCH sh -
+# 5. Apply the Kubernetes Gateway API CRDs
+# Note, we're using kustomize to apply the CRDs from the k8s gateway api repo as
+# kustomize supports remote GH URLs and provides more flexibility compared to
+# alternatives like running a series of `kubectl apply -f <url>` commands. This
+# approach is largely necessary since upstream hasn't adopted a helm chart for
+# the CRDs yet, or won't be for the foreseeable future.
+kubectl apply --kustomize "https://github.com/kubernetes-sigs/gateway-api/config/crd/$CONFORMANCE_CHANNEL?ref=$CONFORMANCE_VERSION"
 
-  echo "Installing Istio"
-  yes | "./istio-$ISTIO_VERSION/bin/istioctl" install --set profile=minimal
+# 6. Conformance test setup
+if [[ $CONFORMANCE == "true" ]]; then
+  echo "Running conformance test setup"
+
+  . $SCRIPT_DIR/setup-metalllb-on-kind.sh
 fi

@@ -1,3 +1,5 @@
+//go:build ignore
+
 package helpers
 
 // from here: https://golang.org/src/crypto/tls/generate_cert.go
@@ -19,9 +21,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
+	corev1 "k8s.io/api/core/v1"
+
+	v1 "github.com/kgateway-dev/kgateway/projects/gloo/pkg/api/v1"
+
 	"golang.org/x/crypto/ocsp"
 
-	kubev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/onsi/ginkgo/v2"
@@ -218,16 +224,31 @@ func MtlsPrivateKey() string {
 	return mtlsPrivKey
 }
 
-func GetKubeSecret(name, namespace string) *kubev1.Secret {
-	return &kubev1.Secret{
-		Type: kubev1.SecretTypeTLS,
+func GetKubeSecret(name, namespace string) *corev1.Secret {
+	return &corev1.Secret{
+		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
-			kubev1.TLSCertKey:       []byte(Certificate()),
-			kubev1.TLSPrivateKeyKey: []byte(PrivateKey()),
+			corev1.TLSCertKey:       []byte(Certificate()),
+			corev1.TLSPrivateKeyKey: []byte(PrivateKey()),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+		},
+	}
+}
+
+func GetTlsSecret(name, namespace string) *v1.Secret {
+	return &v1.Secret{
+		Metadata: &core.Metadata{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Kind: &v1.Secret_Tls{
+			Tls: &v1.TlsSecret{
+				PrivateKey: PrivateKey(),
+				CertChain:  Certificate(),
+			},
 		},
 	}
 }
