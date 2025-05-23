@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -49,10 +50,11 @@ func TestTranslation(
 	outputFile string,
 	gwNN types.NamespacedName,
 	assertReports AssertReports,
+	settingsOpts ...SettingsOpts,
 ) {
 	results, err := TestCase{
 		InputFiles: inputFiles,
-	}.Run(t, ctx)
+	}.Run(t, ctx, settingsOpts...)
 	Expect(err).NotTo(HaveOccurred())
 	// TODO allow expecting multiple gateways in the output (map nns -> outputFile?)
 	Expect(results).To(HaveLen(1))
@@ -84,7 +86,7 @@ type ActualTestResult struct {
 
 func CompareProxy(expectedFile string, actualProxy *irtranslator.TranslationResult) (string, error) {
 	if os.Getenv("UPDATE_OUTPUTS") == "1" {
-		d, err := MarshalAnyYaml(actualProxy)
+		d, err := MarshalAnyYaml(sortProxy(actualProxy))
 		if err != nil {
 			return "", err
 		}
@@ -95,7 +97,25 @@ func CompareProxy(expectedFile string, actualProxy *irtranslator.TranslationResu
 	if err != nil {
 		return "", err
 	}
-	return cmp.Diff(expectedProxy, actualProxy, protocmp.Transform(), cmpopts.EquateNaNs()), nil
+	return cmp.Diff(sortProxy(expectedProxy), sortProxy(actualProxy), protocmp.Transform(), cmpopts.EquateNaNs()), nil
+}
+
+func sortProxy(proxy *irtranslator.TranslationResult) *irtranslator.TranslationResult {
+	if proxy == nil {
+		return nil
+	}
+
+	sort.Slice(proxy.Listeners, func(i, j int) bool {
+		return proxy.Listeners[i].GetName() < proxy.Listeners[j].GetName()
+	})
+	sort.Slice(proxy.Routes, func(i, j int) bool {
+		return proxy.Routes[i].GetName() < proxy.Routes[j].GetName()
+	})
+	sort.Slice(proxy.ExtraClusters, func(i, j int) bool {
+		return proxy.ExtraClusters[i].GetName() < proxy.ExtraClusters[j].GetName()
+	})
+
+	return proxy
 }
 
 func AreReportsSuccess(gwNN types.NamespacedName, reportsMap reports.ReportMap) error {
@@ -161,7 +181,15 @@ func AreReportsSuccess(gwNN types.NamespacedName, reportsMap reports.ReportMap) 
 	return nil
 }
 
-func (tc TestCase) Run(t test.Failer, ctx context.Context) (map[types.NamespacedName]ActualTestResult, error) {
+type SettingsOpts func(*settings.Settings)
+
+func SettingsWithDiscoveryNamespaceSelectors(cfgJson string) SettingsOpts {
+	return func(s *settings.Settings) {
+		s.DiscoveryNamespaceSelectors = cfgJson
+	}
+}
+
+func (tc TestCase) Run(t test.Failer, ctx context.Context, settingsOpts ...SettingsOpts) (map[types.NamespacedName]ActualTestResult, error) {
 	var (
 		anyObjs []runtime.Object
 		ourObjs []runtime.Object
@@ -230,7 +258,11 @@ func (tc TestCase) Run(t test.Failer, ctx context.Context) (map[types.Namespaced
 	if err != nil {
 		return nil, err
 	}
-	commoncol := common.NewCommonCollections(
+	for _, opt := range settingsOpts {
+		opt(st)
+	}
+
+	commoncol, err := common.NewCommonCollections(
 		ctx,
 		krtOpts,
 		cli,
@@ -240,6 +272,9 @@ func (tc TestCase) Run(t test.Failer, ctx context.Context) (map[types.Namespaced
 		logr.Discard(),
 		*st,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	plugins := registry.Plugins(ctx, commoncol)
 	// TODO: consider moving the common code to a util that both proxy syncer and this test call
