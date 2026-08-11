@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -278,7 +277,7 @@ func EndResourceStatusSync(details ResourceSyncDetails) bool {
 	default:
 		syncChLock.RUnlock()
 
-		logger.Log(context.Background(), slog.LevelError,
+		logger.Error(
 			"resource metrics sync channel is full, dropping end sync metrics update",
 			"gateway", details.Gateway,
 			"namespace", details.Namespace,
@@ -317,7 +316,7 @@ func EndResourceXDSSync(details ResourceSyncDetails) bool {
 	default:
 		syncChLock.RUnlock()
 
-		logger.Log(context.Background(), slog.LevelError,
+		logger.Error(
 			"resource metrics sync channel is full, dropping end sync metrics update",
 			"gateway", details.Gateway,
 			"namespace", details.Namespace,
