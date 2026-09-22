@@ -33,6 +33,20 @@ func (c endpointsWithUccName) Equals(k endpointsWithUccName) bool {
 	return c.endpoints.Version == k.endpoints.Version && c.resourceName == k.resourceName
 }
 
+// snapshotPerClient assembles the complete xDS snapshot each connected client should
+// receive, joining the per-Gateway listener/route translation with that client's own
+// clusters and endpoints. It is the last stage of translation: every subsequent stage
+// just ships what this produces.
+//
+// It publishes only complete snapshots. When a client's per-client inputs have not
+// caught up with the event being processed, it returns nil rather than a partial
+// snapshot; the subscriber treats that as "keep serving what Envoy already has".
+// Retaining the last coherent config is always preferable to publishing an
+// incoherent one, which Envoy would apply — dropping routes or endpoints that are
+// still valid.
+//
+// extraEndpointCollections are additional per-client endpoint sources merged into the
+// same EDS payload, currently the gateway's own local cluster.
 func snapshotPerClient(
 	krtopts krtutil.KrtOptions,
 	uccCol krt.Collection[ir.UniquelyConnectedClient],
@@ -41,10 +55,7 @@ func snapshotPerClient(
 	clusters PerClientEnvoyClusters,
 	extraEndpointCollections ...PerClientEnvoyEndpoints,
 ) krt.Collection[XdsSnapWrapper] {
-	// Per-client CDS payloads are assembled by PerClientEnvoyClusters, one row per
-	// connected client, from the shared bases plus that client's own overlays. The
-	// row is complete by construction, so there is nothing to wait for here beyond
-	// the row itself existing.
+	// PerClientEnvoyClusters stores each client's assembled CDS payload (shared bases plus the client's overlays).
 	clusterSnapshot := clusters.perClient
 
 	endpointResources := krt.NewCollection(uccCol, func(kctx krt.HandlerContext, ucc ir.UniquelyConnectedClient) *endpointsWithUccName {
@@ -55,7 +66,9 @@ func snapshotPerClient(
 		endpointsProto := make([]envoycachetypes.ResourceWithTTL, 0, len(endpointsForUcc))
 		var endpointsHash uint64
 		for _, ep := range endpointsForUcc {
-			endpointsProto = append(endpointsProto, envoycachetypes.ResourceWithTTL{Resource: ep.Endpoints})
+			// ResourceWithTTL is the only exit for the interned CLA; it runs
+			// the mutation tripwire when armed. See package sharedproto.
+			endpointsProto = append(endpointsProto, ep.Endpoints.ResourceWithTTL())
 			endpointsHash ^= ep.EndpointsHash
 		}
 
@@ -96,14 +109,6 @@ func snapshotPerClient(
 		// and were reverted. The first-connect delay in
 		// pkg/krtcollections/uniqueclients.go keeps a client's first watch
 		// from observing that convergence window.
-		//
-		// Debug rather than Info: this fires for every client on startup until
-		// its inputs land, and at fleet scale an Info line per client would
-		// drown the signal it exists for. The durable signal is the
-		// xds_snapshot_deferred_clients gauge (snapshotDeferralTracker below),
-		// which counts the clients currently in this state per gateway and,
-		// unlike this log line, also covers a client that has never had a
-		// snapshot published at all.
 		if clustersForUcc == nil || clientEndpointResources == nil {
 			logger.Debug("per-client inputs not ready; deferring snapshot", "client", ucc.ResourceName())
 			return nil
@@ -227,11 +232,8 @@ func snapshotPerClient(
 		}
 	})
 
-	// Publish how many connected clients currently have no snapshot row. This
-	// is the observable form of the deferral above: the log line is Debug, and
-	// a client that never received a first snapshot never emits an event, so
-	// only a gauge derived from both collections can show a client being
-	// starved of config rather than briefly converging.
+	// Track connected clients without snapshot rows, including those still
+	// waiting for their first snapshot.
 	newSnapshotDeferralTracker().register(uccCol, xdsSnapshotsForUcc)
 
 	return xdsSnapshotsForUcc
