@@ -1076,8 +1076,6 @@ func (k refGrantIndexKey) String() string {
 	return fmt.Sprintf("%s/%s/%s/%s/%s/%s/%s", k.RefGrantNs, k.FromNs, k.ToGK.Group, k.ToGK.Kind, k.ToName, k.FromGK.Group, k.FromGK.Kind)
 }
 
-// MARK: RefGrantIndex
-
 type RefGrantIndex struct {
 	refgrants     krt.Collection[*gwv1b1.ReferenceGrant]
 	refGrantIndex krt.Index[refGrantIndexKey, *gwv1b1.ReferenceGrant]
